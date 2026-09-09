@@ -1,8 +1,7 @@
-from uuid import UUID
-
 from pydantic import BaseModel, ConfigDict
 
 from app.agents.router import AgentName, IntentName
+from app.schemas.identifiers import TransportId
 
 
 class ChatResponseData(BaseModel):
@@ -23,7 +22,7 @@ class ErrorData(BaseModel):
 class AgentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: UUID
+    request_id: TransportId
     success: bool
     data: ChatResponseData | None
     error: ErrorData | None
@@ -31,7 +30,7 @@ class AgentResponse(BaseModel):
     @classmethod
     def ok(
         cls,
-        request_id: UUID,
+        request_id: str,
         message: str,
         agent: AgentName,
         intent: IntentName,
@@ -44,7 +43,7 @@ class AgentResponse(BaseModel):
         )
 
     @classmethod
-    def fail(cls, request_id: UUID, code: str, message: str) -> "AgentResponse":
+    def fail(cls, request_id: str, code: str, message: str) -> "AgentResponse":
         return cls(
             request_id=request_id,
             success=False,

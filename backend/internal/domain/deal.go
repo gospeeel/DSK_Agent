@@ -16,6 +16,7 @@ type Deal struct {
 	UserID          int        `json:"id_user"`
 	EmployeeID      int        `json:"id_employee"`
 	ApartmentID     int        `json:"id_apartment"`
+	ChatSessionID   *int       `json:"id_chat_session,omitempty"`
 	BasePrice       float64    `json:"base_price"`
 	PercentDiscount float64    `json:"percent_discount"`
 	TotalPrice      float64    `json:"total_price"`
@@ -32,6 +33,7 @@ type Deal struct {
 type CreateDealRequest struct {
 	UserID          int     `json:"id_user"`
 	ApartmentID     int     `json:"id_apartment"`
+	ChatSessionID   *int    `json:"id_chat_session,omitempty"`
 	BasePrice       float64 `json:"base_price"`
 	PercentDiscount float64 `json:"percent_discount"`
 }

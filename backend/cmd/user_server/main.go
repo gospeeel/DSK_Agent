@@ -57,7 +57,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
@@ -73,9 +73,6 @@ func main() {
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/logout", authHandler.Logout)
 
-	// AI Chat RPC endpoint
-	r.With(authHandler.OptionalAuthMiddleware).Post("/api/ai/chat", aiHandler.Chat)
-
 	// Chat session creation (authenticated or guest lead)
 	r.With(authHandler.OptionalAuthMiddleware).Post("/api/chat/sessions", chatHandler.CreateSession)
 
@@ -83,16 +80,17 @@ func main() {
 	r.Get("/api/complexes", constructionHandler.GetAllComplexes)
 	r.Get("/api/complexes/{id}", constructionHandler.GetComplex)
 	r.Get("/api/complexes/{complexId}/buildings", constructionHandler.GetBuildingsByComplex)
-	
+
 	r.Get("/api/buildings/{id}", constructionHandler.GetBuilding)
 	r.Get("/api/buildings/{buildingId}/apartments", constructionHandler.GetApartmentsByBuilding)
 	r.Get("/api/buildings/{buildingId}/progress", constructionHandler.GetProgressByBuilding)
-	
+
 	r.Get("/api/apartments/{id}", constructionHandler.GetApartment)
 	r.Get("/api/progress/{id}", constructionHandler.GetProgress)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authHandler.AuthMiddleware)
+		r.Post("/api/ai/chat", aiHandler.Chat)
 		r.Get("/api/auth/profile", authHandler.Profile)
 		r.Get("/api/users/me", userHandler.GetMe)
 		r.Put("/api/users/me", userHandler.UpdateMe)

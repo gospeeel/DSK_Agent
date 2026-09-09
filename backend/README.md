@@ -66,6 +66,8 @@ DB_NAME=dsk
 JWT_SECRET=supersecretjwt
 PORT=8080
 RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+MAX_MANAGER_DISCOUNT_PERCENT=5
+MAX_SUPERVISOR_DISCOUNT_PERCENT=15
 ```
 
 ### 2. Запуск через Docker Compose

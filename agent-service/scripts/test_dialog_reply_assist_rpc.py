@@ -7,7 +7,6 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -19,8 +18,8 @@ ACTION = "dialog.reply_assist"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("deal_id", type=UUID, help="Deal UUID")
-    parser.add_argument("user_id", type=UUID, help="Manager/user UUID")
+    parser.add_argument("deal_id", type=int, help="Integer deal ID")
+    parser.add_argument("user_id", type=int, help="Integer manager/user ID")
     parser.add_argument(
         "--selected-text",
         help="Selected client message fragment; omit to use the latest client message",
@@ -36,8 +35,8 @@ def parse_args() -> argparse.Namespace:
 
 async def run(args: argparse.Namespace) -> int:
     payload = {
-        "deal_id": str(args.deal_id),
-        "user_id": str(args.user_id),
+        "deal_id": args.deal_id,
+        "user_id": args.user_id,
     }
     if args.selected_text is not None:
         payload["selected_text"] = args.selected_text

@@ -1,21 +1,22 @@
 from typing import Literal
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.identifiers import BusinessId, TransportId
 
 
 class ChatPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    user_id: UUID
-    session_id: UUID
-    deal_id: UUID | None = None
+    user_id: BusinessId
+    session_id: BusinessId
+    deal_id: BusinessId | None = None
     message: str = Field(min_length=1)
 
 
 class AgentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: UUID
+    request_id: TransportId
     action: Literal["chat"]
     payload: ChatPayload

@@ -1,15 +1,16 @@
 from typing import Any
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.identifiers import BusinessId
 
 
 class DealFacts(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: UUID
-    client_id: UUID | None = None
-    apartment_id: UUID
+    id: BusinessId
+    client_id: BusinessId | None = None
+    apartment_id: BusinessId
     stage: str | None = None
     next_action: str | None = None
 
@@ -17,8 +18,8 @@ class DealFacts(BaseModel):
 class ApartmentFacts(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: UUID
-    building_id: UUID
+    id: BusinessId
+    building_id: BusinessId
     number: str | None = None
     floor: int | None = None
     rooms: int | None = None
@@ -30,7 +31,7 @@ class ApartmentFacts(BaseModel):
 class BuildingFacts(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: UUID
+    id: BusinessId
     name: str | None = None
     district: str = Field(min_length=1)
     readiness_percent: int | None = Field(default=None, ge=0, le=100)

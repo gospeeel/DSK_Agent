@@ -9,7 +9,6 @@ import logging
 import sys
 from pathlib import Path
 from typing import Any, Callable
-from uuid import UUID
 
 import aio_pika
 from aio_pika import ExchangeType, IncomingMessage
@@ -42,10 +41,10 @@ ROUTING_KEYS = (
     "backend.recommendation.create",
 )
 
-CLIENT_ID = "11111111-1111-1111-1111-111111111111"
-APARTMENT_ID = "22222222-2222-2222-2222-222222222222"
-BUILDING_ID = "33333333-3333-3333-3333-333333333333"
-OFFER_ID = "88888888-8888-8888-8888-888888888888"
+CLIENT_ID = 201
+APARTMENT_ID = 301
+BUILDING_ID = 401
+OFFER_ID = 501
 
 
 def require_string(payload: dict[str, Any], field: str) -> str:
@@ -55,9 +54,16 @@ def require_string(payload: dict[str, Any], field: str) -> str:
     return value
 
 
+def require_business_id(payload: dict[str, Any], field: str) -> int:
+    value = payload.get(field)
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"payload.{field} must be a positive integer")
+    return value
+
+
 def deal_data(payload: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": require_string(payload, "deal_id"),
+        "id": require_business_id(payload, "deal_id"),
         "client_id": CLIENT_ID,
         "apartment_id": APARTMENT_ID,
         "stage": "negotiation",
@@ -66,11 +72,11 @@ def deal_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def deals_by_building_data(payload: dict[str, Any]) -> dict[str, Any]:
-    require_string(payload, "building_id")
+    require_business_id(payload, "building_id")
     return {
         "deals": [
             {
-                "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "id": 101,
                 "status": "active",
             }
         ]
@@ -78,7 +84,7 @@ def deals_by_building_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def apartment_data(payload: dict[str, Any]) -> dict[str, Any]:
-    require_string(payload, "apartment_id")
+    require_business_id(payload, "apartment_id")
     return {
         "id": APARTMENT_ID,
         "building_id": BUILDING_ID,
@@ -92,7 +98,7 @@ def apartment_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def building_data(payload: dict[str, Any]) -> dict[str, Any]:
-    require_string(payload, "building_id")
+    require_business_id(payload, "building_id")
     return {
         "id": BUILDING_ID,
         "name": "ЖК Альфа",
@@ -121,7 +127,7 @@ def competitor_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def construction_events_data(payload: dict[str, Any]) -> dict[str, Any]:
-    require_string(payload, "building_id")
+    require_business_id(payload, "building_id")
     return {
         "events": [
             {
@@ -135,29 +141,29 @@ def construction_events_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def deal_messages_data(payload: dict[str, Any]) -> dict[str, Any]:
-    require_string(payload, "deal_id")
+    require_business_id(payload, "deal_id")
     limit = payload.get("limit")
     if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
         raise ValueError("payload.limit must be a positive integer")
     return {
         "messages": [
             {
-                "id": "44444444-4444-4444-4444-444444444444",
+                "id": 601,
                 "direction": "manager_to_client",
                 "body": "Какой бюджет рассматриваете?",
             },
             {
-                "id": "55555555-5555-5555-5555-555555555555",
+                "id": 602,
                 "direction": "client_to_manager",
                 "body": "До 15 миллионов. Нужна двухкомнатная квартира.",
             },
             {
-                "id": "66666666-6666-6666-6666-666666666666",
+                "id": 603,
                 "direction": "client_to_manager",
                 "body": "Желательно не ниже 7 этажа, парковка обязательна.",
             },
             {
-                "id": "77777777-7777-7777-7777-777777777777",
+                "id": 604,
                 "direction": "client_to_manager",
                 "body": "Ещё переживаю, что у конкурента дешевле.",
             },
@@ -166,7 +172,7 @@ def deal_messages_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def update_client_preferences_data(payload: dict[str, Any]) -> dict[str, Any]:
-    client_id = require_string(payload, "client_id")
+    client_id = require_business_id(payload, "client_id")
     preferences = payload.get("preferences")
     if not isinstance(preferences, dict):
         raise ValueError("payload.preferences must be an object")
@@ -185,7 +191,7 @@ def update_client_preferences_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 def client_data(payload: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": require_string(payload, "client_id"),
+        "id": require_business_id(payload, "client_id"),
         "full_name": "Иван Иванов",
         "budget_max": 15000000,
         "preferences": {
@@ -197,7 +203,8 @@ def client_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def calculate_offer_data(payload: dict[str, Any]) -> dict[str, Any]:
-    require_string(payload, "deal_id")
+    require_business_id(payload, "deal_id")
+    require_business_id(payload, "requested_by")
     discount_percent = payload.get("discount_percent")
     if not isinstance(discount_percent, (int, float)) or isinstance(
         discount_percent, bool
@@ -209,46 +216,46 @@ def calculate_offer_data(payload: dict[str, Any]) -> dict[str, Any]:
     base_price = 14_200_000
     discount_amount = round(base_price * discount_percent / 100)
     return {
+        "deal_id": payload["deal_id"],
         "base_price": base_price,
         "discount_percent": discount_percent,
         "discount_amount": discount_amount,
-        "total_price": base_price - discount_amount,
-        "max_manager_discount": 3,
+        "final_price": base_price - discount_amount,
+        "max_allowed_discount": 3,
         "requires_approval": discount_percent > 3,
     }
 
 
 def create_offer_data(payload: dict[str, Any]) -> dict[str, Any]:
-    require_string(payload, "deal_id")
-    require_string(payload, "created_by")
+    require_business_id(payload, "deal_id")
+    require_business_id(payload, "created_by")
     require_string(payload, "generated_text")
     discount_percent = payload.get("discount_percent")
     if not isinstance(discount_percent, (int, float)) or isinstance(
         discount_percent, bool
     ):
         raise ValueError("payload.discount_percent must be a number")
-    status = "pending_approval" if discount_percent > 3 else "created"
+    status = "draft" if discount_percent > 3 else "approved"
     return {"offer_id": OFFER_ID, "status": status}
 
 
 def request_offer_approval_data(payload: dict[str, Any]) -> dict[str, Any]:
-    offer_id = require_string(payload, "offer_id")
-    require_string(payload, "requested_by")
-    require_string(payload, "reason")
-    return {"offer_id": offer_id, "status": "waiting_approval"}
+    offer_id = require_business_id(payload, "offer_id")
+    require_business_id(payload, "requested_by")
+    return {"offer_id": offer_id, "status": "pending_approval"}
 
 
 def offer_data(payload: dict[str, Any]) -> dict[str, Any]:
-    offer_id = require_string(payload, "offer_id")
+    offer_id = require_business_id(payload, "offer_id")
     return {
         "id": offer_id,
-        "deal_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "deal_id": 101,
         "status": "approved",
     }
 
 
 def generate_offer_pdf_data(payload: dict[str, Any]) -> dict[str, Any]:
-    offer_id = require_string(payload, "offer_id")
+    offer_id = require_business_id(payload, "offer_id")
     return {
         "offer_id": offer_id,
         "document_url": "/documents/offers/123.pdf",
@@ -256,13 +263,13 @@ def generate_offer_pdf_data(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def recommendation_data(payload: dict[str, Any]) -> dict[str, Any]:
-    require_string(payload, "deal_id")
+    require_business_id(payload, "deal_id")
     kind = require_string(payload, "kind")
     require_string(payload, "recommendation")
     if kind != "construction_risk":
         raise ValueError("payload.kind must be construction_risk")
     return {
-        "recommendation_id": "99999999-9999-9999-9999-999999999999",
+        "recommendation_id": 701,
         "created": True,
     }
 
@@ -304,11 +311,17 @@ HANDLERS: dict[str, tuple[str, Callable[[dict[str, Any]], dict[str, Any]]]] = {
 }
 
 
-def extract_request_id(body: bytes) -> UUID | None:
+def extract_request_id(body: bytes) -> str | None:
     try:
         raw = json.loads(body)
-        return UUID(str(raw.get("request_id"))) if isinstance(raw, dict) else None
-    except (json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError):
+        if not isinstance(raw, dict):
+            return None
+        request_id = raw.get("request_id")
+        if not isinstance(request_id, str):
+            return None
+        request_id = request_id.strip()
+        return request_id or None
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
         return None
 
 
@@ -327,7 +340,7 @@ async def publish_response(
 
 
 def error_response(
-    request_id: UUID,
+    request_id: str,
     code: str,
     message: str,
 ) -> BackendResponse:
@@ -344,7 +357,7 @@ async def handle_request(message: IncomingMessage, channel: AbstractChannel) -> 
         logger.error("Rejecting request without reply_to: routing_key=%s", message.routing_key)
         await message.reject(requeue=False)
         return
-    if not message.correlation_id:
+    if not message.correlation_id or not message.correlation_id.strip():
         logger.error("Rejecting request without correlation_id: routing_key=%s", message.routing_key)
         await message.reject(requeue=False)
         return

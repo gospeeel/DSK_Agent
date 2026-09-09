@@ -1,23 +1,23 @@
 from typing import Literal
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.client_facts import ClientFacts
+from app.schemas.identifiers import BusinessId, TransportId
 from app.schemas.responses import ErrorData
 
 
 class DialogAnalyzePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    deal_id: UUID
-    user_id: UUID
+    deal_id: BusinessId
+    user_id: BusinessId
 
 
 class DialogAnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: UUID
+    request_id: TransportId
     action: Literal["dialog.analyze"]
     payload: DialogAnalyzePayload
 
@@ -25,8 +25,8 @@ class DialogAnalyzeRequest(BaseModel):
 class DialogAnalyzeResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    deal_id: UUID
-    client_id: UUID
+    deal_id: BusinessId
+    client_id: BusinessId
     analysis: ClientFacts
     preferences_updated: bool
 
@@ -34,17 +34,17 @@ class DialogAnalyzeResult(BaseModel):
 class DialogAnalyzeResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: UUID
+    request_id: TransportId
     success: bool
     data: DialogAnalyzeResult | None
     error: ErrorData | None
 
     @classmethod
-    def ok(cls, request_id: UUID, data: DialogAnalyzeResult) -> "DialogAnalyzeResponse":
+    def ok(cls, request_id: str, data: DialogAnalyzeResult) -> "DialogAnalyzeResponse":
         return cls(request_id=request_id, success=True, data=data, error=None)
 
     @classmethod
-    def fail(cls, request_id: UUID, code: str, message: str) -> "DialogAnalyzeResponse":
+    def fail(cls, request_id: str, code: str, message: str) -> "DialogAnalyzeResponse":
         return cls(
             request_id=request_id,
             success=False,
@@ -56,8 +56,8 @@ class DialogAnalyzeResponse(BaseModel):
 class DialogReplyAssistPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    deal_id: UUID
-    user_id: UUID
+    deal_id: BusinessId
+    user_id: BusinessId
     selected_text: str | None = None
 
     @field_validator("selected_text", mode="before")
@@ -72,7 +72,7 @@ class DialogReplyAssistPayload(BaseModel):
 class DialogReplyAssistRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: UUID
+    request_id: TransportId
     action: Literal["dialog.reply_assist"]
     payload: DialogReplyAssistPayload
 
@@ -98,7 +98,7 @@ class ReplyAssistAnalysis(BaseModel):
 class DialogReplyAssistResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    deal_id: UUID
+    deal_id: BusinessId
     source: Literal["last_client_message", "selected_text"]
     analysis: ReplyAssistAnalysis
     suggested_reply: str = Field(min_length=1)
@@ -107,7 +107,7 @@ class DialogReplyAssistResult(BaseModel):
 class DialogReplyAssistResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: UUID
+    request_id: TransportId
     success: bool
     data: DialogReplyAssistResult | None
     error: ErrorData | None
@@ -115,7 +115,7 @@ class DialogReplyAssistResponse(BaseModel):
     @classmethod
     def ok(
         cls,
-        request_id: UUID,
+        request_id: str,
         data: DialogReplyAssistResult,
     ) -> "DialogReplyAssistResponse":
         return cls(request_id=request_id, success=True, data=data, error=None)
@@ -123,7 +123,7 @@ class DialogReplyAssistResponse(BaseModel):
     @classmethod
     def fail(
         cls,
-        request_id: UUID,
+        request_id: str,
         code: str,
         message: str,
     ) -> "DialogReplyAssistResponse":

@@ -76,6 +76,7 @@ type Building struct {
 	ID                   int            `json:"id"`
 	ResidentialComplexID int            `json:"residential_complex_id"`
 	Address              string         `json:"address"`
+	District             string         `json:"district"`
 	Latitude             float64        `json:"latitude"`
 	Longitude            float64        `json:"longitude"`
 	FloorsCount          int            `json:"floors_count"`
@@ -106,6 +107,17 @@ type ConstructionProgress struct {
 	PlannedEndDate       *time.Time     `json:"planned_end_date"`
 	ActualEndDate        *time.Time     `json:"actual_end_date"`
 	Status               ProgressStatus `json:"status"`
-	CompletionPercentage int            `json:"completion_percentage"`
+	CompletionPercentage *int           `json:"completion_percentage"`
 	DelayReason          string         `json:"delay_reason"`
+	RiskLevel            *string        `json:"risk_level,omitempty"`
+	DelayDays            *int           `json:"delay_days,omitempty"`
+}
+
+type Competitor struct {
+	ID            int     `json:"id"`
+	ProjectName   string  `json:"project_name"`
+	District      string  `json:"district"`
+	PricePerSqm   *int64  `json:"price_per_sqm,omitempty"`
+	Advantages    *string `json:"advantages,omitempty"`
+	Disadvantages *string `json:"disadvantages,omitempty"`
 }

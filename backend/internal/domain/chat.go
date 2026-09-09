@@ -2,6 +2,11 @@ package domain
 
 import "time"
 
+const (
+	SenderTypeClient  = "client"
+	SenderTypeManager = "manager"
+)
+
 type ChatSessionStatus string
 
 const (

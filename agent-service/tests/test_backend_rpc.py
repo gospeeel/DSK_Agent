@@ -1,8 +1,6 @@
 import asyncio
 import json
 from unittest.mock import AsyncMock, Mock
-from uuid import UUID
-
 import pytest
 
 from app.broker.backend_rpc import (
@@ -60,7 +58,7 @@ async def test_successful_call_has_valid_rpc_properties_and_cleans_pending() -> 
     response = await client.call(
         routing_key="backend.deal.get",
         action="deal.get",
-        payload={"deal_id": "11111111-1111-1111-1111-111111111111"},
+        payload={"deal_id": 101},
     )
 
     channel.declare_queue.assert_awaited_once_with(
@@ -71,8 +69,9 @@ async def test_successful_call_has_valid_rpc_properties_and_cleans_pending() -> 
     reply_queue.consume.assert_awaited_once()
     request_message, routing_key = published[0]
     request = json.loads(request_message.body)
-    assert UUID(request["request_id"])
-    assert UUID(request_message.correlation_id)
+    assert isinstance(request["request_id"], str) and request["request_id"]
+    assert isinstance(request_message.correlation_id, str)
+    assert request_message.correlation_id
     assert request_message.reply_to == "amq.gen-callback"
     assert request_message.content_type == "application/json"
     assert routing_key == "backend.deal.get"
@@ -94,10 +93,10 @@ async def test_parallel_calls_are_matched_by_correlation_id() -> None:
 
     exchange.publish.side_effect = capture
     first_task = asyncio.create_task(
-        client.call("backend.deal.get", "deal.get", {"deal_id": "first"})
+        client.call("backend.deal.get", "deal.get", {"deal_id": 101})
     )
     second_task = asyncio.create_task(
-        client.call("backend.building.get", "building.get", {"building_id": "second"})
+        client.call("backend.building.get", "building.get", {"building_id": 401})
     )
     await asyncio.wait_for(both_published.wait(), timeout=1)
 
@@ -231,7 +230,7 @@ async def test_close_completes_and_removes_pending_requests() -> None:
 
     exchange.publish.side_effect = publish
     call_task = asyncio.create_task(
-        client.call("backend.deal.get", "deal.get", {"deal_id": "pending"})
+        client.call("backend.deal.get", "deal.get", {"deal_id": 101})
     )
     await asyncio.wait_for(request_published.wait(), timeout=1)
 

@@ -1,6 +1,5 @@
 import json
 from unittest.mock import AsyncMock, Mock
-from uuid import UUID
 
 import httpx
 import pytest
@@ -18,8 +17,8 @@ from app.schemas.events import ConstructionDelayDetectedEvent
 from app.schemas.negotiation import DealFacts
 
 
-BUILDING_ID = UUID("33333333-3333-3333-3333-333333333333")
-DEAL_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+BUILDING_ID = 401
+DEAL_ID = 101
 
 
 def backend_response(data: dict) -> BackendResponse:
@@ -33,11 +32,11 @@ def backend_response(data: dict) -> BackendResponse:
 
 def event_body() -> dict:
     return {
-        "event_id": "77777777-7777-7777-7777-777777777777",
+        "event_id": "event_construction_delay_123",
         "event_type": "construction.delay_detected",
         "occurred_at": "2026-09-08T14:30:00Z",
         "payload": {
-            "building_id": str(BUILDING_ID),
+            "building_id": BUILDING_ID,
             "delay_days": 21,
             "risk_level": "high",
         },
@@ -62,10 +61,10 @@ def make_workflow() -> tuple[ConstructionDelayWorkflow, Mock, Mock, Mock]:
             return_value=backend_response(
                 {
                     "deals": [
-                        {"id": str(DEAL_ID), "status": "active"},
+                        {"id": DEAL_ID, "status": "pending"},
                         {
-                            "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                            "status": "closed",
+                            "id": 102,
+                            "status": "completed",
                         },
                     ]
                 }
@@ -74,9 +73,9 @@ def make_workflow() -> tuple[ConstructionDelayWorkflow, Mock, Mock, Mock]:
         get_deal=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(DEAL_ID),
-                    "client_id": "11111111-1111-1111-1111-111111111111",
-                    "apartment_id": "22222222-2222-2222-2222-222222222222",
+                    "id": DEAL_ID,
+                    "client_id": 201,
+                    "apartment_id": 301,
                     "stage": "negotiation",
                 }
             )
@@ -91,7 +90,7 @@ def make_workflow() -> tuple[ConstructionDelayWorkflow, Mock, Mock, Mock]:
         create_recommendation=AsyncMock(
             return_value=backend_response(
                 {
-                    "recommendation_id": "66666666-6666-6666-6666-666666666666",
+                    "recommendation_id": 701,
                     "created": True,
                 }
             )
@@ -123,9 +122,9 @@ async def test_analytics_recommendation_uses_only_factual_context() -> None:
     analytics = AnalyticsAgent(llm, Mock(), Mock(), Mock(), Mock(), Mock(), Mock())
     deal = DealFacts.model_validate(
         {
-            "id": str(DEAL_ID),
-            "client_id": "11111111-1111-1111-1111-111111111111",
-            "apartment_id": "22222222-2222-2222-2222-222222222222",
+            "id": DEAL_ID,
+            "client_id": 201,
+            "apartment_id": 301,
             "stage": "negotiation",
         }
     )
@@ -150,7 +149,7 @@ async def test_analytics_recommendation_uses_only_factual_context() -> None:
 
 
 @pytest.mark.asyncio
-async def test_workflow_creates_recommendation_only_for_active_deal() -> None:
+async def test_workflow_creates_recommendation_only_for_open_backend_deal() -> None:
     workflow, deal_tools, analytics, recommendation_tools = make_workflow()
 
     result = await workflow.run(

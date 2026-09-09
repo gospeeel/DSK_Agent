@@ -12,6 +12,16 @@ type UserService interface {
 	GetUser(ctx context.Context, id int) (*domain.User, error)
 	GetAllUsers(ctx context.Context) ([]*domain.User, error)
 	UpdateUser(ctx context.Context, id int, req *domain.UpdateUserRequest) (*domain.User, error)
+	UpdateClientPreferences(ctx context.Context, id int, budgetMax *int64, preferences map[string]any) (*domain.ClientPreferences, error)
+}
+
+func (s *userService) UpdateClientPreferences(
+	ctx context.Context,
+	id int,
+	budgetMax *int64,
+	preferences map[string]any,
+) (*domain.ClientPreferences, error) {
+	return s.repo.UpdateClientPreferences(ctx, id, budgetMax, preferences)
 }
 
 type userService struct {

@@ -1,5 +1,4 @@
 from unittest.mock import AsyncMock, Mock
-from uuid import UUID, uuid4
 
 import pytest
 
@@ -12,14 +11,14 @@ from app.agents.negotiation import (
 from app.broker.backend_rpc import BackendRpcError, BackendRpcTimeoutError
 from app.schemas.backend import BackendResponse
 
-DEAL_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-APARTMENT_ID = UUID("22222222-2222-2222-2222-222222222222")
-BUILDING_ID = UUID("33333333-3333-3333-3333-333333333333")
+DEAL_ID = 101
+APARTMENT_ID = 301
+BUILDING_ID = 401
 
 
 def backend_response(data: dict) -> BackendResponse:
     return BackendResponse(
-        request_id=uuid4(),
+        request_id="backend_req_negotiation",
         success=True,
         data=data,
         error=None,
@@ -32,9 +31,9 @@ def make_dependencies() -> tuple[Mock, Mock, Mock, Mock, Mock]:
         get_deal=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(DEAL_ID),
-                    "client_id": "11111111-1111-1111-1111-111111111111",
-                    "apartment_id": str(APARTMENT_ID),
+                    "id": DEAL_ID,
+                    "client_id": 201,
+                    "apartment_id": APARTMENT_ID,
                     "stage": "negotiation",
                     "next_action": "Подготовить контраргумент",
                 }
@@ -45,8 +44,8 @@ def make_dependencies() -> tuple[Mock, Mock, Mock, Mock, Mock]:
         get_apartment=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(APARTMENT_ID),
-                    "building_id": str(BUILDING_ID),
+                    "id": APARTMENT_ID,
+                    "building_id": BUILDING_ID,
                     "number": "142",
                     "floor": 8,
                     "rooms": 2,
@@ -61,7 +60,7 @@ def make_dependencies() -> tuple[Mock, Mock, Mock, Mock, Mock]:
         get_building=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(BUILDING_ID),
+                    "id": BUILDING_ID,
                     "name": "ЖК Альфа",
                     "district": "Центральный",
                     "readiness_percent": 76,
@@ -188,7 +187,7 @@ async def test_invalid_backend_data_returns_safe_response() -> None:
         make_dependencies()
     )
     deal_tools.get_deal.return_value = backend_response(
-        {"id": str(DEAL_ID), "stage": "negotiation"}
+        {"id": DEAL_ID, "stage": "negotiation"}
     )
     agent = NegotiationAgent(
         llm,
@@ -214,3 +213,7 @@ def test_negotiation_prompt_forbids_unsupported_factual_claims() -> None:
     assert "недостатки" in prompt
     assert "конкурента" in prompt
     assert "фактическом контексте" in prompt
+    assert "если преимущество не подтверждено" in prompt
+    assert "варианты отделки" in prompt
+    assert "разнообразие планировок" in prompt
+    assert "инфраструктуру, транспорт, ипотеку, скидки" in prompt

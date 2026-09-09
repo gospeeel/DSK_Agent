@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"backend/internal/domain"
@@ -35,42 +34,55 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "message cannot be empty", http.StatusBadRequest)
 		return
 	}
+	if req.SessionID == nil || *req.SessionID <= 0 {
+		http.Error(w, "session_id must be a positive integer", http.StatusBadRequest)
+		return
+	}
+	if req.DealID != nil && *req.DealID <= 0 {
+		http.Error(w, "deal_id must be a positive integer or null", http.StatusBadRequest)
+		return
+	}
 
-	var userIDStr *string
-	var userIDInt *int
+	var userID int
 	senderType := "client"
 
 	if user, ok := r.Context().Value("user").(*domain.User); ok && user != nil {
-		idStr := strconv.Itoa(user.ID)
-		userIDStr = &idStr
-		userIDInt = &user.ID
+		userID = user.ID
 		if user.Role == domain.RoleManager || user.Role == domain.RoleSupervisor {
 			senderType = "manager"
 		}
 	}
+	if userID <= 0 {
+		http.Error(w, "authenticated user is required", http.StatusUnauthorized)
+		return
+	}
 
 	// Build RabbitMQ RPC payload
 	payload := domain.AgentChatPayload{
-		UserID:    userIDStr,
-		SessionID: req.SessionID,
+		UserID:    userID,
+		SessionID: *req.SessionID,
 		DealID:    req.DealID,
 		Message:   req.Message,
 	}
 
-	// If session_id is a valid integer, record user message in chat
-	var sessionIDInt int
-	var hasValidSession bool
-	if req.SessionID != nil {
-		if id, err := strconv.Atoi(*req.SessionID); err == nil {
-			sessionIDInt = id
-			hasValidSession = true
-			_, _ = h.chatService.SendMessage(r.Context(), sessionIDInt, userIDInt, senderType, req.Message)
-		}
-	}
+	// Record the manager message in the selected chat session.
+	userIDForMessage := userID
+	_, _ = h.chatService.SendMessage(
+		r.Context(),
+		*req.SessionID,
+		&userIDForMessage,
+		senderType,
+		req.Message,
+	)
 
 	// Send RPC to Agent Service via RabbitMQ
 	respData, err := h.aiService.SendChatRequest(r.Context(), payload)
 	if err != nil {
+		var agentError *service.AgentRPCError
+		if errors.As(err, &agentError) && agentError.Code == "FORBIDDEN" {
+			http.Error(w, "FORBIDDEN", http.StatusForbidden)
+			return
+		}
 		if errors.Is(err, service.ErrRabbitMQUnavailable) {
 			http.Error(w, "AI service unavailable: "+err.Error(), http.StatusServiceUnavailable)
 			return
@@ -83,9 +95,9 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If session_id is valid, record AI response in chat as sender_type = "ai"
-	if hasValidSession && respData != nil && respData.Message != "" {
-		_, _ = h.chatService.SendMessage(r.Context(), sessionIDInt, nil, "ai", respData.Message)
+	// Record the AI response in the same chat session.
+	if respData != nil && respData.Message != "" {
+		_, _ = h.chatService.SendMessage(r.Context(), *req.SessionID, nil, "ai", respData.Message)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

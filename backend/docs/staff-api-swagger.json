@@ -48,11 +48,56 @@
       },
       "AIChatRequest": {
         "type": "object",
-        "required": ["message"],
+        "required": ["message", "session_id"],
         "properties": {
           "message": { "type": "string", "example": "Предложи клиенту альтернативные 2-комнатные квартиры до 12 млн" },
-          "session_id": { "type": "string", "example": "1" },
-          "deal_id": { "type": "string", "nullable": true, "example": null }
+          "session_id": { "type": "integer", "example": 1 },
+          "deal_id": { "type": "integer", "nullable": true, "example": null }
+        }
+      },
+      "ResidentialComplex": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" }, "name": { "type": "string" },
+          "address": { "type": "string" }, "description": { "type": "string" }
+        }
+      },
+      "Building": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" }, "residential_complex_id": { "type": "integer" },
+          "address": { "type": "string" }, "district": { "type": "string" },
+          "latitude": { "type": "number" }, "longitude": { "type": "number" },
+          "floors_count": { "type": "integer" },
+          "planned_date": { "type": "string", "format": "date-time", "nullable": true },
+          "actual_date": { "type": "string", "format": "date-time", "nullable": true },
+          "status": { "type": "string", "enum": ["design", "construction", "completed", "suspended"] },
+          "type_wall_material": { "type": "string", "enum": ["panel", "monolith", "brick", "block"] }
+        }
+      },
+      "Apartment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" }, "building_id": { "type": "integer" },
+          "number": { "type": "string" }, "rooms": { "type": "integer" }, "floor": { "type": "integer" },
+          "area": { "type": "number" }, "price": { "type": "number" },
+          "type_finishing": { "type": "string", "enum": ["rough", "white_box", "turnkey"] },
+          "status": { "type": "string", "enum": ["free", "booked", "sold"] }
+        }
+      },
+      "ConstructionProgress": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" }, "building_id": { "type": "integer" },
+          "stage_name": { "type": "string", "enum": ["excavation", "foundation", "frame", "roofing", "finishing"] },
+          "planned_start_date": { "type": "string", "format": "date-time", "nullable": true },
+          "actual_start_date": { "type": "string", "format": "date-time", "nullable": true },
+          "planned_end_date": { "type": "string", "format": "date-time", "nullable": true },
+          "actual_end_date": { "type": "string", "format": "date-time", "nullable": true },
+          "status": { "type": "string", "enum": ["not_started", "in_progress", "completed", "delayed"] },
+          "completion_percentage": { "type": "integer", "nullable": true },
+          "delay_reason": { "type": "string" }, "risk_level": { "type": "string", "nullable": true },
+          "delay_days": { "type": "integer", "nullable": true }
         }
       }
     }
@@ -80,6 +125,13 @@
         "responses": { "200": { "description": "Успешный вход" } }
       }
     },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Выход из системы",
+        "responses": { "200": { "description": "Cookie token удалена" } }
+      }
+    },
     "/api/staff/profile": {
       "get": {
         "tags": ["Staff"],
@@ -94,6 +146,15 @@
         "summary": "Список всех зарегистрированных пользователей",
         "security": [{ "BearerAuth": [] }],
         "responses": { "200": { "description": "Список пользователей" } }
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Получить пользователя по ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Пользователь" } }
       }
     },
     "/api/chat/sessions": {
@@ -211,6 +272,48 @@
         },
         "responses": { "200": { "description": "Сделка обновлена" } }
       }
+    },
+    "/api/complexes": {
+      "get": { "tags": ["Construction"], "summary": "Получить жилые комплексы", "security": [{ "BearerAuth": [] }], "responses": { "200": { "description": "Список ЖК" } } },
+      "post": { "tags": ["Construction"], "summary": "Создать жилой комплекс", "security": [{ "BearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResidentialComplex" } } } }, "responses": { "201": { "description": "ЖК создан" } } }
+    },
+    "/api/complexes/{id}": {
+      "get": { "tags": ["Construction"], "summary": "Получить жилой комплекс", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "ЖК" } } },
+      "put": { "tags": ["Construction"], "summary": "Обновить жилой комплекс", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResidentialComplex" } } } }, "responses": { "200": { "description": "ЖК обновлён" } } },
+      "delete": { "tags": ["Construction"], "summary": "Удалить жилой комплекс", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "204": { "description": "ЖК удалён" } } }
+    },
+    "/api/complexes/{complexId}/buildings": {
+      "get": { "tags": ["Construction"], "summary": "Получить корпуса жилого комплекса", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "complexId", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Список корпусов" } } }
+    },
+    "/api/buildings": {
+      "post": { "tags": ["Construction"], "summary": "Создать корпус", "security": [{ "BearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Building" } } } }, "responses": { "201": { "description": "Корпус создан" } } }
+    },
+    "/api/buildings/{id}": {
+      "get": { "tags": ["Construction"], "summary": "Получить корпус", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Корпус" } } },
+      "put": { "tags": ["Construction"], "summary": "Обновить корпус", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Building" } } } }, "responses": { "200": { "description": "Корпус обновлён" } } },
+      "delete": { "tags": ["Construction"], "summary": "Удалить корпус", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "204": { "description": "Корпус удалён" } } }
+    },
+    "/api/buildings/{buildingId}/apartments": {
+      "get": { "tags": ["Construction"], "summary": "Получить квартиры корпуса", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "buildingId", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Список квартир" } } }
+    },
+    "/api/buildings/{buildingId}/progress": {
+      "get": { "tags": ["Construction"], "summary": "Получить этапы строительства корпуса", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "buildingId", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Этапы строительства" } } }
+    },
+    "/api/apartments": {
+      "post": { "tags": ["Construction"], "summary": "Создать квартиру", "security": [{ "BearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Apartment" } } } }, "responses": { "201": { "description": "Квартира создана" } } }
+    },
+    "/api/apartments/{id}": {
+      "get": { "tags": ["Construction"], "summary": "Получить квартиру", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Квартира" } } },
+      "put": { "tags": ["Construction"], "summary": "Обновить квартиру", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Apartment" } } } }, "responses": { "200": { "description": "Квартира обновлена" } } },
+      "delete": { "tags": ["Construction"], "summary": "Удалить квартиру", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "204": { "description": "Квартира удалена" } } }
+    },
+    "/api/progress": {
+      "post": { "tags": ["Construction"], "summary": "Создать этап строительства", "security": [{ "BearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConstructionProgress" } } } }, "responses": { "201": { "description": "Этап создан" } } }
+    },
+    "/api/progress/{id}": {
+      "get": { "tags": ["Construction"], "summary": "Получить этап строительства", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Этап строительства" } } },
+      "put": { "tags": ["Construction"], "summary": "Обновить этап строительства", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConstructionProgress" } } } }, "responses": { "200": { "description": "Этап обновлён" } } },
+      "delete": { "tags": ["Construction"], "summary": "Удалить этап строительства", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "204": { "description": "Этап удалён" } } }
     },
     "/api/ai/chat": {
       "post": {

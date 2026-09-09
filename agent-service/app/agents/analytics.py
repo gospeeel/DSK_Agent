@@ -1,7 +1,6 @@
 import json
 import logging
 from typing import Any, Literal, Protocol
-from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -62,6 +61,10 @@ ANALYTICS_SYSTEM_PROMPT = """Ты аналитический помощник м
 Строгие правила:
 - Используй только данные из секции «Фактический контекст backend» и текст менеджера.
 - ЗАПРЕЩЕНО придумывать задержки, даты, причины событий и risk level.
+- completion_percentage — фактическая готовность этапа. Упоминай её только если
+  поле присутствует; если оно null, не придумывай процент готовности.
+- Если building.planned_delivery присутствует, обязательно назови эту дату точно.
+  Если поле null, не придумывай плановую дату сдачи.
 - ЗАПРЕЩЕНО утверждать влияние на срок сдачи без фактических оснований в context.
 - Не выполняй финансовые расчёты и не добавляй сведения из внешних источников.
 - Если данных недостаточно, явно скажи об этом менеджеру.
@@ -178,7 +181,7 @@ class AnalyticsAgent:
         self,
         message: str,
         intent: AnalyticsIntent,
-        deal_id: UUID | None,
+        deal_id: int | None,
     ) -> str:
         if intent not in (
             "analyze_risk",
@@ -252,7 +255,7 @@ class AnalyticsAgent:
         self,
         deal: DealFacts,
         *,
-        building_id: UUID,
+        building_id: int,
         delay_days: int,
         risk_level: Literal["low", "medium", "high"],
     ) -> str:
@@ -271,7 +274,7 @@ class AnalyticsAgent:
             system_prompt=CONSTRUCTION_DELAY_SYSTEM_PROMPT,
         )
 
-    async def _extract_client_facts(self, deal_id: UUID | None) -> str:
+    async def _extract_client_facts(self, deal_id: int | None) -> str:
         if deal_id is None:
             return CLIENT_FACTS_MISSING_DEAL_RESPONSE
 
@@ -307,7 +310,7 @@ class AnalyticsAgent:
             return f"{summary}\n\n{suffix}"
         return summary
 
-    async def analyze_dialog(self, deal_id: UUID) -> DialogAnalyzeResult:
+    async def analyze_dialog(self, deal_id: int) -> DialogAnalyzeResult:
         deal_response = await self._deal_tools.get_deal(deal_id)
         deal = DealFacts.model_validate(require_backend_data(deal_response.data))
         if deal.client_id is None:

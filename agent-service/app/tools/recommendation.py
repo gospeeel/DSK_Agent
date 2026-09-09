@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from app.broker.backend_rpc import BackendRpcClient
 from app.schemas.backend import BackendResponse
 
@@ -10,7 +8,7 @@ class RecommendationTools:
 
     async def create_recommendation(
         self,
-        deal_id: UUID,
+        deal_id: int,
         kind: str,
         recommendation: str,
     ) -> BackendResponse:
@@ -18,7 +16,7 @@ class RecommendationTools:
             routing_key="backend.recommendation.create",
             action="recommendation.create",
             payload={
-                "deal_id": str(deal_id),
+                "deal_id": deal_id,
                 "kind": kind,
                 "recommendation": recommendation,
             },

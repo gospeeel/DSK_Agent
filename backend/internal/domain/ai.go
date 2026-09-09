@@ -2,17 +2,17 @@ package domain
 
 // HTTP request from frontend
 type AIChatRequest struct {
-	Message   string  `json:"message"`
-	SessionID *string `json:"session_id,omitempty"`
-	DealID    *string `json:"deal_id,omitempty"`
+	Message   string `json:"message"`
+	SessionID *int   `json:"session_id,omitempty"`
+	DealID    *int   `json:"deal_id,omitempty"`
 }
 
 // RabbitMQ RPC request payload
 type AgentChatPayload struct {
-	UserID    *string `json:"user_id"`
-	SessionID *string `json:"session_id"`
-	DealID    *string `json:"deal_id"`
-	Message   string  `json:"message"`
+	UserID    int    `json:"user_id"`
+	SessionID int    `json:"session_id"`
+	DealID    *int   `json:"deal_id"`
+	Message   string `json:"message"`
 }
 
 // RabbitMQ RPC request envelope
@@ -29,10 +29,15 @@ type AgentChatResponseData struct {
 	Intent  string `json:"intent"`
 }
 
+type AgentChatError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // RabbitMQ RPC response envelope
 type AgentChatResponseEnvelope struct {
 	RequestID string                 `json:"request_id"`
 	Success   bool                   `json:"success"`
 	Data      *AgentChatResponseData `json:"data"`
-	Error     interface{}            `json:"error"`
+	Error     *AgentChatError        `json:"error"`
 }

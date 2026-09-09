@@ -1,6 +1,5 @@
 import json
 from unittest.mock import AsyncMock, Mock
-from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -18,8 +17,8 @@ from app.schemas.backend import BackendResponse
 from app.schemas.events import OfferApprovedEvent, OfferRejectedEvent
 
 
-OFFER_ID = UUID("88888888-8888-8888-8888-888888888888")
-DEAL_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+OFFER_ID = 501
+DEAL_ID = 101
 
 
 def backend_response(data: dict) -> BackendResponse:
@@ -32,11 +31,11 @@ def backend_response(data: dict) -> BackendResponse:
 
 
 def event_body(decision: str = "approved") -> dict:
-    payload = {"offer_id": str(OFFER_ID), "deal_id": str(DEAL_ID)}
+    payload = {"offer_id": OFFER_ID, "deal_id": DEAL_ID}
     if decision == "rejected":
         payload["reason"] = "Слишком высокая скидка"
     return {
-        "event_id": "77777777-7777-7777-7777-777777777777",
+        "event_id": "event_offer_approved_123",
         "event_type": f"offer.{decision}",
         "occurred_at": "2026-09-08T14:30:00Z",
         "payload": payload,
@@ -59,13 +58,13 @@ def make_offer_tools(status: str = "approved") -> Mock:
     return Mock(
         get_offer=AsyncMock(
             return_value=backend_response(
-                {"id": str(OFFER_ID), "deal_id": str(DEAL_ID), "status": status}
+                {"id": OFFER_ID, "deal_id": DEAL_ID, "status": status}
             )
         ),
         generate_offer_pdf=AsyncMock(
             return_value=backend_response(
                 {
-                    "offer_id": str(OFFER_ID),
+                    "offer_id": OFFER_ID,
                     "document_url": "/documents/offers/123.pdf",
                 }
             )

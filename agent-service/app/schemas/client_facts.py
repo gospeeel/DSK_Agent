@@ -1,13 +1,14 @@
 from typing import Literal
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.schemas.identifiers import BusinessId
 
 
 class DealMessage(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
-    id: UUID
+    id: BusinessId
     direction: Literal["client_to_manager", "manager_to_client"]
     body: str = Field(min_length=1)
 

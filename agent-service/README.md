@@ -81,11 +81,11 @@ docker run --rm -p 8000:8000 --env-file .env agent-service
 
 ```json
 {
-  "request_id": "11111111-1111-1111-1111-111111111111",
+  "request_id": "req_1723456789000_1_a1b2c3d4",
   "action": "chat",
   "payload": {
-    "user_id": "22222222-2222-2222-2222-222222222222",
-    "session_id": "33333333-3333-3333-3333-333333333333",
+    "user_id": 15,
+    "session_id": 42,
     "deal_id": null,
     "message": "Привет"
   }
@@ -96,9 +96,13 @@ docker run --rm -p 8000:8000 --env-file .env agent-service
 
 ```json
 {
-  "request_id": "11111111-1111-1111-1111-111111111111",
+  "request_id": "req_1723456789000_1_a1b2c3d4",
   "success": true,
-  "data": {"message": "Здравствуйте!"},
+  "data": {
+    "message": "Здравствуйте!",
+    "agent": "general",
+    "intent": "general_chat"
+  },
   "error": null
 }
 ```
@@ -107,7 +111,7 @@ docker run --rm -p 8000:8000 --env-file .env agent-service
 
 ```json
 {
-  "request_id": "11111111-1111-1111-1111-111111111111",
+  "request_id": "req_1723456789000_1_a1b2c3d4",
   "success": false,
   "data": null,
   "error": {
@@ -117,7 +121,13 @@ docker run --rm -p 8000:8000 --env-file .env agent-service
 }
 ```
 
-Некорректный запрос с валидным `request_id` получает код `INVALID_REQUEST`. Сообщение без валидного `request_id` или без `reply_to` отклоняется без повторной постановки, так как корректный RPC-ответ для него сформировать невозможно.
+Бизнесовые идентификаторы передаются как JSON integer. `request_id` и RabbitMQ
+`correlation_id` — непустые строки и не обязаны быть UUID.
+
+Некорректный запрос с валидным `request_id` получает код `VALIDATION_ERROR`.
+Сообщение без валидного `request_id`, `reply_to` или `correlation_id` отклоняется
+без повторной постановки, так как корректный RPC-ответ для него сформировать
+невозможно.
 
 ## Тесты
 

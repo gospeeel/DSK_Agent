@@ -1,6 +1,5 @@
 import logging
 from typing import Literal, TypedDict
-from uuid import UUID
 
 import httpx
 from gigachat.exceptions import RateLimitError, ServerError
@@ -43,7 +42,7 @@ class ConstructionDelayWorkflow:
     async def run(
         self,
         *,
-        building_id: UUID,
+        building_id: int,
         delay_days: int,
         risk_level: Literal["low", "medium", "high"],
     ) -> ConstructionDelayResult:
@@ -58,7 +57,7 @@ class ConstructionDelayWorkflow:
         created = 0
         had_permanent_error = False
         for affected_deal in affected.deals:
-            if affected_deal.status != "active":
+            if affected_deal.status not in {"pending", "contract"}:
                 continue
             try:
                 response = await self._deal_tools.get_deal(affected_deal.id)

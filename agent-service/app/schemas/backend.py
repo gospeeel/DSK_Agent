@@ -1,13 +1,14 @@
 from typing import Any
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.schemas.identifiers import TransportId
 
 
 class BackendRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: UUID
+    request_id: TransportId
     action: str = Field(min_length=1)
     payload: dict[str, Any]
 
@@ -22,7 +23,7 @@ class BackendError(BaseModel):
 class BackendResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_id: UUID
+    request_id: TransportId
     success: bool
     data: dict[str, Any] | None
     error: BackendError | None

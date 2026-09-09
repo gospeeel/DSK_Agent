@@ -1,6 +1,5 @@
 import json
 from unittest.mock import AsyncMock, Mock
-from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -18,13 +17,13 @@ from app.schemas.backend import BackendResponse
 from app.schemas.client_facts import ClientFacts, DealMessagesData
 
 
-DEAL_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-APARTMENT_ID = UUID("22222222-2222-2222-2222-222222222222")
+DEAL_ID = 101
+APARTMENT_ID = 301
 
 
 def backend_response(data: dict) -> BackendResponse:
     return BackendResponse(
-        request_id=uuid4(),
+        request_id="backend_req_client_facts",
         success=True,
         data=data,
         error=None,
@@ -63,9 +62,9 @@ def make_agent(
         get_deal=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(DEAL_ID),
-                    "client_id": "11111111-1111-1111-1111-111111111111",
-                    "apartment_id": str(APARTMENT_ID),
+                    "id": DEAL_ID,
+                    "client_id": 201,
+                    "apartment_id": APARTMENT_ID,
                     "stage": "negotiation",
                 }
             )
@@ -74,22 +73,22 @@ def make_agent(
     if messages is None:
         messages = [
             {
-                "id": "44444444-4444-4444-4444-444444444444",
+                "id": 601,
                 "direction": "manager_to_client",
                 "body": "Вам нужна трёхкомнатная квартира?",
             },
             {
-                "id": "55555555-5555-5555-5555-555555555555",
+                "id": 602,
                 "direction": "client_to_manager",
                 "body": "Нет, нужна двухкомнатная до 15 миллионов.",
             },
             {
-                "id": "66666666-6666-6666-6666-666666666666",
+                "id": 603,
                 "direction": "client_to_manager",
                 "body": "Не ниже 7 этажа, парковка обязательна.",
             },
             {
-                "id": "77777777-7777-7777-7777-777777777777",
+                "id": 604,
                 "direction": "client_to_manager",
                 "body": "У конкурента дешевле.",
             },
@@ -128,7 +127,7 @@ async def test_extract_client_facts_uses_deal_messages_and_structured_output() -
     assert llm.parse_structured.await_args.args[1] is ClientFacts
     llm.generate.assert_not_awaited()
     client_tools.update_client_preferences.assert_awaited_once_with(
-        UUID("11111111-1111-1111-1111-111111111111"),
+        201,
         preferences={
             "rooms": 2,
             "floor_min": 7,
@@ -156,7 +155,7 @@ def test_messages_validate_direction_and_body() -> None:
         {
             "messages": [
                 {
-                    "id": "55555555-5555-5555-5555-555555555555",
+                    "id": 602,
                     "direction": "client_to_manager",
                     "body": "Нужна парковка",
                 }
@@ -170,7 +169,7 @@ def test_messages_validate_direction_and_body() -> None:
             {
                 "messages": [
                     {
-                        "id": "55555555-5555-5555-5555-555555555555",
+                        "id": 602,
                         "direction": "unknown",
                         "body": "Нужна парковка",
                     }
@@ -244,7 +243,7 @@ async def test_missing_deal_does_not_call_tools_or_llm() -> None:
 @pytest.mark.asyncio
 async def test_empty_client_message_history_returns_safe_response() -> None:
     manager_message = {
-        "id": "44444444-4444-4444-4444-444444444444",
+        "id": 601,
         "direction": "manager_to_client",
         "body": "Какой бюджет рассматриваете?",
     }
@@ -378,7 +377,7 @@ async def test_successful_fallback_preserves_fields_and_updates_preferences() ->
     assert result.analysis.model_dump() == facts.model_dump()
     assert result.preferences_updated is True
     client_tools.update_client_preferences.assert_awaited_once_with(
-        UUID("11111111-1111-1111-1111-111111111111"),
+        201,
         preferences={
             "rooms": 2,
             "floor_min": 7,

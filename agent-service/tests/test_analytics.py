@@ -1,5 +1,4 @@
 from unittest.mock import AsyncMock, Mock
-from uuid import UUID, uuid4
 
 import pytest
 
@@ -13,14 +12,14 @@ from app.broker.backend_rpc import BackendRpcError, BackendRpcTimeoutError
 from app.schemas.backend import BackendResponse
 
 
-DEAL_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-APARTMENT_ID = UUID("22222222-2222-2222-2222-222222222222")
-BUILDING_ID = UUID("33333333-3333-3333-3333-333333333333")
+DEAL_ID = 101
+APARTMENT_ID = 301
+BUILDING_ID = 401
 
 
 def backend_response(data: dict) -> BackendResponse:
     return BackendResponse(
-        request_id=uuid4(),
+        request_id="backend_req_analytics",
         success=True,
         data=data,
         error=None,
@@ -33,9 +32,9 @@ def make_dependencies() -> tuple[Mock, Mock, Mock, Mock, Mock, Mock, Mock]:
         get_deal=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(DEAL_ID),
-                    "client_id": "11111111-1111-1111-1111-111111111111",
-                    "apartment_id": str(APARTMENT_ID),
+                    "id": DEAL_ID,
+                    "client_id": 201,
+                    "apartment_id": APARTMENT_ID,
                     "stage": "negotiation",
                     "next_action": "Оценить риски",
                 }
@@ -46,8 +45,8 @@ def make_dependencies() -> tuple[Mock, Mock, Mock, Mock, Mock, Mock, Mock]:
         get_apartment=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(APARTMENT_ID),
-                    "building_id": str(BUILDING_ID),
+                    "id": APARTMENT_ID,
+                    "building_id": BUILDING_ID,
                     "number": "142",
                     "floor": 8,
                     "rooms": 2,
@@ -62,7 +61,7 @@ def make_dependencies() -> tuple[Mock, Mock, Mock, Mock, Mock, Mock, Mock]:
         get_building=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(BUILDING_ID),
+                    "id": BUILDING_ID,
                     "name": "ЖК Альфа",
                     "district": "Центральный",
                     "readiness_percent": 76,
@@ -82,6 +81,7 @@ def make_dependencies() -> tuple[Mock, Mock, Mock, Mock, Mock, Mock, Mock]:
                             "title": "Задержка поставки окон",
                             "risk_level": "medium",
                             "delay_days": 14,
+                            "completion_percentage": 70,
                         }
                     ]
                 }
@@ -142,6 +142,7 @@ async def test_analytics_workflow_uses_factual_backend_context(intent: str) -> N
     assert "Задержка поставки окон" in user_prompt
     assert '"risk_level": "medium"' in user_prompt
     assert '"delay_days": 14' in user_prompt
+    assert '"completion_percentage": 70' in user_prompt
     assert '"request_id"' not in user_prompt
     assert '"success"' not in user_prompt
     assert '"error"' not in user_prompt
@@ -229,7 +230,7 @@ async def test_invalid_backend_data_returns_safe_response() -> None:
         client_tools,
     ) = make_dependencies()
     deal_tools.get_deal.return_value = backend_response(
-        {"id": str(DEAL_ID), "stage": "negotiation"}
+        {"id": DEAL_ID, "stage": "negotiation"}
     )
     agent = AnalyticsAgent(
         llm,
@@ -256,3 +257,47 @@ def test_analytics_prompt_forbids_unsupported_factual_claims() -> None:
     assert "причины" in prompt
     assert "risk level" in prompt
     assert "без фактических оснований" in prompt
+    assert "completion_percentage" in prompt
+    assert "если оно null, не придумывай процент" in prompt
+    assert "building.planned_delivery" in prompt
+    assert "обязательно назови эту дату точно" in prompt
+
+
+@pytest.mark.asyncio
+async def test_null_completion_percentage_remains_null_in_analytics_prompt() -> None:
+    (
+        llm,
+        deal_tools,
+        apartment_tools,
+        building_tools,
+        construction_tools,
+        messages_tools,
+        client_tools,
+    ) = make_dependencies()
+    construction_tools.get_construction_events.return_value = backend_response(
+        {
+            "events": [
+                {
+                    "type": "delivery_delay",
+                    "title": "Нет данных о готовности",
+                    "risk_level": "high",
+                    "delay_days": 25,
+                    "completion_percentage": None,
+                }
+            ]
+        }
+    )
+    agent = AnalyticsAgent(
+        llm,
+        deal_tools,
+        apartment_tools,
+        building_tools,
+        construction_tools,
+        messages_tools,
+        client_tools,
+    )
+
+    await agent.generate("Проанализируй строительство", "analyze_construction", DEAL_ID)
+
+    prompt = llm.generate.await_args.args[0]
+    assert '"completion_percentage": null' in prompt
