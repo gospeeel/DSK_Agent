@@ -1,0 +1,228 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AI Hackathon - Staff Server API",
+    "description": "Корпоративный API для менеджеров и супервайзеров (управление заявками, сделками, объектами недвижимости и AI ассистентом)",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8081",
+      "description": "Local Staff Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT токен сотрудника (роль manager или supervisor)"
+      }
+    },
+    "schemas": {
+      "CreateDealRequest": {
+        "type": "object",
+        "required": ["id_user", "id_apartment", "base_price", "percent_discount"],
+        "properties": {
+          "id_user": { "type": "integer", "example": 10 },
+          "id_apartment": { "type": "integer", "example": 42 },
+          "base_price": { "type": "number", "example": 10000000.00 },
+          "percent_discount": { "type": "number", "example": 5.0 }
+        }
+      },
+      "UpdateDealStatusRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["pending", "contract", "completed", "cancelled"], "example": "contract" },
+          "percent_discount": { "type": "number", "example": 7.0 }
+        }
+      },
+      "RejectSessionRequest": {
+        "type": "object",
+        "required": ["reason"],
+        "properties": {
+          "reason": { "type": "string", "example": "Клиент выбрал другой ЖК, не устроила цена" }
+        }
+      },
+      "AIChatRequest": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string", "example": "Предложи клиенту альтернативные 2-комнатные квартиры до 12 млн" },
+          "session_id": { "type": "string", "example": "1" },
+          "deal_id": { "type": "string", "nullable": true, "example": null }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Создание аккаунта сотрудника (manager/supervisor)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["name", "email", "password", "role"], "properties": { "name": { "type": "string" }, "email": { "type": "string" }, "password": { "type": "string" }, "role": { "type": "string", "enum": ["manager", "supervisor"] } } } } }
+        },
+        "responses": { "201": { "description": "Сотрудник создан" } }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Вход сотрудника",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["email", "password"], "properties": { "email": { "type": "string" }, "password": { "type": "string" } } } } }
+        },
+        "responses": { "200": { "description": "Успешный вход" } }
+      }
+    },
+    "/api/staff/profile": {
+      "get": {
+        "tags": ["Staff"],
+        "summary": "Профиль текущего сотрудника",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Профиль сотрудника" } }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Список всех зарегистрированных пользователей",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Список пользователей" } }
+      }
+    },
+    "/api/chat/sessions": {
+      "get": {
+        "tags": ["Chat Management"],
+        "summary": "Список всех обращений и заявок с фильтрацией",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["open", "in_progress", "close"] }, "description": "Фильтр по статусу" },
+          { "name": "employee_id", "in": "query", "schema": { "type": "integer" }, "description": "Фильтр по назначенному сотруднику" }
+        ],
+        "responses": { "200": { "description": "Список сессий" } }
+      }
+    },
+    "/api/chat/sessions/{id}": {
+      "get": {
+        "tags": ["Chat Management"],
+        "summary": "Детали сессии и контакты клиента",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Детали сессии" } }
+      }
+    },
+    "/api/chat/sessions/{id}/take": {
+      "post": {
+        "tags": ["Chat Management"],
+        "summary": "Взять заявку в работу (назначает текущего сотрудника, статус -> in_progress)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Заявка переведена в работу" } }
+      }
+    },
+    "/api/chat/sessions/{id}/close": {
+      "post": {
+        "tags": ["Chat Management"],
+        "summary": "Завершить сессию чата (статус -> close)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Сессия закрыта" } }
+      }
+    },
+    "/api/chat/sessions/{id}/reject": {
+      "post": {
+        "tags": ["Chat Management"],
+        "summary": "Отклонить заявку с указанием причины (сохраняется в chat_session_rejections)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RejectSessionRequest" } } }
+        },
+        "responses": { "201": { "description": "Отказ зафиксирован" } }
+      }
+    },
+    "/api/chat/sessions/{id}/messages": {
+      "get": {
+        "tags": ["Chat Management"],
+        "summary": "Получить сообщения сессии",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Список сообщений" } }
+      },
+      "post": {
+        "tags": ["Chat Management"],
+        "summary": "Отправить ответ клиенту",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "required": ["content"], "properties": { "content": { "type": "string" } } } } }
+        },
+        "responses": { "201": { "description": "Сообщение отправлено" } }
+      }
+    },
+    "/api/deals": {
+      "post": {
+        "tags": ["Deals Management"],
+        "summary": "Создать сделку / коммерческое предложение",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateDealRequest" } } }
+        },
+        "responses": { "201": { "description": "Сделка создана" } }
+      },
+      "get": {
+        "tags": ["Deals Management"],
+        "summary": "Список всех сделок (фильтрация по status, user_id)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "contract", "completed", "cancelled"] } },
+          { "name": "user_id", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Список сделок" } }
+      }
+    },
+    "/api/deals/{id}": {
+      "get": {
+        "tags": ["Deals Management"],
+        "summary": "Детали сделки",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Детали сделки" } }
+      }
+    },
+    "/api/deals/{id}/status": {
+      "put": {
+        "tags": ["Deals Management"],
+        "summary": "Обновить статус сделки и/или процент скидки",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateDealStatusRequest" } } }
+        },
+        "responses": { "200": { "description": "Сделка обновлена" } }
+      }
+    },
+    "/api/ai/chat": {
+      "post": {
+        "tags": ["AI Assistant"],
+        "summary": "Консультация сотрудника с AI Agent (подбор альтернатив, КП)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AIChatRequest" } } }
+        },
+        "responses": { "200": { "description": "Ответ AI Agent" } }
+      }
+    }
+  }
+}
