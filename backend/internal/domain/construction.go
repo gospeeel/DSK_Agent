@@ -1,0 +1,111 @@
+package domain
+
+import (
+	"time"
+)
+
+// BuildingStatus Enum
+type BuildingStatus string
+
+const (
+	BuildingStatusDesign       BuildingStatus = "design"
+	BuildingStatusConstruction BuildingStatus = "construction"
+	BuildingStatusCompleted    BuildingStatus = "completed"
+	BuildingStatusSuspended    BuildingStatus = "suspended"
+)
+
+// WallMaterial Enum
+type WallMaterial string
+
+const (
+	WallMaterialPanel    WallMaterial = "panel"
+	WallMaterialMonolith WallMaterial = "monolith"
+	WallMaterialBrick    WallMaterial = "brick"
+	WallMaterialBlock    WallMaterial = "block"
+)
+
+// FinishingType Enum
+type FinishingType string
+
+const (
+	FinishingTypeRough    FinishingType = "rough"
+	FinishingTypeWhiteBox FinishingType = "white_box"
+	FinishingTypeTurnkey  FinishingType = "turnkey"
+)
+
+// ApartmentStatus Enum
+type ApartmentStatus string
+
+const (
+	ApartmentStatusFree   ApartmentStatus = "free"
+	ApartmentStatusBooked ApartmentStatus = "booked"
+	ApartmentStatusSold   ApartmentStatus = "sold"
+)
+
+// ProgressStage Enum
+type ProgressStage string
+
+const (
+	ProgressStageExcavation ProgressStage = "excavation"
+	ProgressStageFoundation ProgressStage = "foundation"
+	ProgressStageFrame      ProgressStage = "frame"
+	ProgressStageRoofing    ProgressStage = "roofing"
+	ProgressStageFinishing  ProgressStage = "finishing"
+)
+
+// ProgressStatus Enum
+type ProgressStatus string
+
+const (
+	ProgressStatusNotStarted ProgressStatus = "not_started"
+	ProgressStatusInProgress ProgressStatus = "in_progress"
+	ProgressStatusCompleted  ProgressStatus = "completed"
+	ProgressStatusDelayed    ProgressStatus = "delayed"
+)
+
+// --- Entities ---
+
+type ResidentialComplex struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Address     string `json:"address"`
+	Description string `json:"description"`
+}
+
+type Building struct {
+	ID                   int            `json:"id"`
+	ResidentialComplexID int            `json:"residential_complex_id"`
+	Address              string         `json:"address"`
+	Latitude             float64        `json:"latitude"`
+	Longitude            float64        `json:"longitude"`
+	FloorsCount          int            `json:"floors_count"`
+	PlannedDate          *time.Time     `json:"planned_date"`
+	ActualDate           *time.Time     `json:"actual_date"`
+	Status               BuildingStatus `json:"status"`
+	TypeWallMaterial     WallMaterial   `json:"type_wall_material"`
+}
+
+type Apartment struct {
+	ID            int             `json:"id"`
+	BuildingID    int             `json:"building_id"`
+	Number        string          `json:"number"`
+	Rooms         int             `json:"rooms"`
+	Floor         int             `json:"floor"`
+	Area          float64         `json:"area"`
+	Price         float64         `json:"price"`
+	TypeFinishing FinishingType   `json:"type_finishing"`
+	Status        ApartmentStatus `json:"status"`
+}
+
+type ConstructionProgress struct {
+	ID                   int            `json:"id"`
+	BuildingID           int            `json:"building_id"`
+	StageName            ProgressStage  `json:"stage_name"`
+	PlannedStartDate     *time.Time     `json:"planned_start_date"`
+	ActualStartDate      *time.Time     `json:"actual_start_date"`
+	PlannedEndDate       *time.Time     `json:"planned_end_date"`
+	ActualEndDate        *time.Time     `json:"actual_end_date"`
+	Status               ProgressStatus `json:"status"`
+	CompletionPercentage int            `json:"completion_percentage"`
+	DelayReason          string         `json:"delay_reason"`
+}
