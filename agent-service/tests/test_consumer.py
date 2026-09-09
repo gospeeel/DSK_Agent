@@ -1,22 +1,22 @@
 import json
 from unittest.mock import AsyncMock, Mock
-from uuid import UUID
 
 import httpx
 import pytest
 from gigachat.exceptions import RateLimitError, ServerError
 
 from app.agents.router import RouteDecision
+from app.broker.backend_rpc import BackendRpcError
 from app.broker.consumer import AgentConsumer
 from app.broker.publisher import RpcPublisher
 
 
 REQUEST = {
-    "request_id": "11111111-1111-1111-1111-111111111111",
+    "request_id": "req_test_123",
     "action": "chat",
     "payload": {
-        "user_id": "22222222-2222-2222-2222-222222222222",
-        "session_id": "33333333-3333-3333-3333-333333333333",
+        "user_id": 15,
+        "session_id": 42,
         "deal_id": None,
         "message": "Привет",
     },
@@ -38,7 +38,10 @@ def make_analytics_agent(answer: str = "Аналитический ответ") 
 
 
 def make_offer_agent(answer: str = "Коммерческое предложение") -> Mock:
-    return Mock(generate=AsyncMock(return_value=answer))
+    return Mock(
+        generate=AsyncMock(return_value=answer),
+        resume_pending=AsyncMock(return_value=None),
+    )
 
 
 def make_message(
@@ -83,6 +86,8 @@ async def test_success_is_published_before_ack() -> None:
     assert published.data.message == "Здравствуйте"
     assert published.data.agent == "general"
     assert published.data.intent == "general_chat"
+    assert published.request_id == REQUEST["request_id"]
+    assert publisher.publish.await_args.kwargs["correlation_id"] == "correlation-1"
     message.ack.assert_awaited_once()
     message.nack.assert_not_awaited()
 
@@ -267,6 +272,24 @@ async def test_missing_correlation_id_is_rejected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_blank_correlation_id_is_rejected() -> None:
+    consumer = AgentConsumer(
+        Mock(),
+        Mock(),
+        Mock(),
+        make_router(),
+        make_negotiation_agent(),
+        make_analytics_agent(),
+    )
+    message = make_message(correlation_id="   ")
+
+    await consumer.handle_message(message)
+
+    message.reject.assert_awaited_once_with(requeue=False)
+    message.ack.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("intent", ["handle_objection", "compare_competitor"])
 async def test_negotiation_route_uses_negotiation_agent(intent: str) -> None:
     llm = Mock(generate=AsyncMock(return_value="Общий ответ"))
@@ -281,7 +304,7 @@ async def test_negotiation_route_uses_negotiation_agent(intent: str) -> None:
         negotiation_agent,
         make_analytics_agent(),
     )
-    deal_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    deal_id = 101
     request_with_deal = {
         **REQUEST,
         "payload": {**REQUEST["payload"], "deal_id": deal_id},
@@ -293,7 +316,7 @@ async def test_negotiation_route_uses_negotiation_agent(intent: str) -> None:
     negotiation_agent.generate.assert_awaited_once_with(
         "Привет",
         intent,
-        UUID(deal_id),
+        deal_id,
     )
     llm.generate.assert_not_awaited()
     published = publisher.publish.await_args.kwargs["response"]
@@ -317,7 +340,7 @@ async def test_analytics_route_uses_analytics_agent(intent: str) -> None:
         negotiation_agent,
         analytics_agent,
     )
-    deal_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    deal_id = 101
     request_with_deal = {
         **REQUEST,
         "payload": {**REQUEST["payload"], "deal_id": deal_id},
@@ -329,7 +352,7 @@ async def test_analytics_route_uses_analytics_agent(intent: str) -> None:
     analytics_agent.generate.assert_awaited_once_with(
         "Привет",
         intent,
-        UUID(deal_id),
+        deal_id,
     )
     negotiation_agent.generate.assert_not_awaited()
     llm.generate.assert_not_awaited()
@@ -415,7 +438,7 @@ async def test_offer_routes_use_offer_agent(intent: str) -> None:
         analytics_agent,
         offer_agent,
     )
-    deal_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    deal_id = 101
     request_with_deal = {
         **REQUEST,
         "payload": {**REQUEST["payload"], "deal_id": deal_id},
@@ -426,8 +449,9 @@ async def test_offer_routes_use_offer_agent(intent: str) -> None:
     offer_agent.generate.assert_awaited_once_with(
         "Привет",
         intent,
-        UUID(deal_id),
-        UUID(REQUEST["payload"]["user_id"]),
+        deal_id,
+        REQUEST["payload"]["user_id"],
+        REQUEST["payload"]["session_id"],
     )
     negotiation_agent.generate.assert_not_awaited()
     analytics_agent.generate.assert_not_awaited()
@@ -435,6 +459,75 @@ async def test_offer_routes_use_offer_agent(intent: str) -> None:
     published = publisher.publish.await_args.kwargs["response"]
     assert published.data.agent == "offer"
     assert published.data.intent == intent
+
+
+@pytest.mark.asyncio
+async def test_offer_forbidden_is_returned_as_rpc_error() -> None:
+    offer_agent = make_offer_agent()
+    offer_agent.generate.side_effect = BackendRpcError("forbidden", code="FORBIDDEN")
+    publisher = Mock(publish=AsyncMock())
+    consumer = AgentConsumer(
+        Mock(),
+        publisher,
+        Mock(generate=AsyncMock()),
+        make_router("offer", "create_offer"),
+        make_negotiation_agent(),
+        make_analytics_agent(),
+        offer_agent,
+    )
+    request_with_deal = {
+        **REQUEST,
+        "payload": {**REQUEST["payload"], "deal_id": 101},
+    }
+
+    await consumer.handle_message(make_message(body=request_with_deal))
+
+    response = publisher.publish.await_args.kwargs["response"]
+    assert response.success is False
+    assert response.error.code == "FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_pending_offer_bypasses_router_and_continues_in_same_session() -> None:
+    llm = Mock(generate=AsyncMock(return_value="Общий ответ"))
+    router = make_router("general", "unknown")
+    offer_agent = make_offer_agent()
+    offer_agent.resume_pending.return_value = (
+        "Предложение со скидкой подготовлено",
+        "create_offer",
+    )
+    publisher = Mock(publish=AsyncMock())
+    consumer = AgentConsumer(
+        Mock(),
+        publisher,
+        llm,
+        router,
+        make_negotiation_agent(),
+        make_analytics_agent(),
+        offer_agent,
+    )
+    follow_up = {
+        **REQUEST,
+        "payload": {
+            **REQUEST["payload"],
+            "deal_id": None,
+            "message": "7%",
+        },
+    }
+
+    await consumer.handle_message(make_message(body=follow_up))
+
+    offer_agent.resume_pending.assert_awaited_once_with(
+        "7%",
+        REQUEST["payload"]["user_id"],
+        REQUEST["payload"]["session_id"],
+    )
+    router.route.assert_not_awaited()
+    offer_agent.generate.assert_not_awaited()
+    published = publisher.publish.await_args.kwargs["response"]
+    assert published.data.message == "Предложение со скидкой подготовлено"
+    assert published.data.agent == "offer"
+    assert published.data.intent == "create_offer"
 
 
 @pytest.mark.asyncio

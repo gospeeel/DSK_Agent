@@ -67,11 +67,11 @@ var UserSpec = []byte(`{
       },
       "AIChatRequest": {
         "type": "object",
-        "required": ["message"],
+        "required": ["message", "session_id"],
         "properties": {
           "message": { "type": "string", "example": "Привет! Расскажи, чем ты можешь помочь?" },
-          "session_id": { "type": "string", "example": "1" },
-          "deal_id": { "type": "string", "nullable": true, "example": null }
+          "session_id": { "type": "integer", "example": 1 },
+          "deal_id": { "type": "integer", "nullable": true, "example": null }
         }
       },
       "AIChatResponse": {
@@ -333,6 +333,7 @@ var UserSpec = []byte(`{
       "post": {
         "tags": ["AI"],
         "summary": "Чат с AI Agent (GigaChat) через RabbitMQ RPC",
+        "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
           "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AIChatRequest" } } }
@@ -397,11 +398,11 @@ var StaffSpec = []byte(`{
       },
       "AIChatRequest": {
         "type": "object",
-        "required": ["message"],
+        "required": ["message", "session_id"],
         "properties": {
           "message": { "type": "string", "example": "Предложи клиенту альтернативные 2-комнатные квартиры до 12 млн" },
-          "session_id": { "type": "string", "example": "1" },
-          "deal_id": { "type": "string", "nullable": true, "example": null }
+          "session_id": { "type": "integer", "example": 1 },
+          "deal_id": { "type": "integer", "nullable": true, "example": null }
         }
       }
     }

@@ -1,6 +1,5 @@
 import json
 from unittest.mock import AsyncMock, Mock
-from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -28,17 +27,17 @@ from app.schemas.dialog import (
 from app.schemas.negotiation import DealFacts
 
 
-REQUEST_ID = UUID("11111111-1111-1111-1111-111111111111")
-USER_ID = UUID("22222222-2222-2222-2222-222222222222")
-DEAL_ID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
-CLIENT_ID = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
-APARTMENT_ID = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
-BUILDING_ID = UUID("dddddddd-dddd-dddd-dddd-dddddddddddd")
+REQUEST_ID = "req_test_dialog"
+USER_ID = 15
+DEAL_ID = 101
+CLIENT_ID = 201
+APARTMENT_ID = 301
+BUILDING_ID = 401
 
 
 def backend_response(data: dict) -> BackendResponse:
     return BackendResponse(
-        request_id=uuid4(),
+        request_id="backend_req_dialog",
         success=True,
         data=data,
         error=None,
@@ -47,9 +46,9 @@ def backend_response(data: dict) -> BackendResponse:
 
 def deal_data() -> dict:
     return {
-        "id": str(DEAL_ID),
-        "client_id": str(CLIENT_ID),
-        "apartment_id": str(APARTMENT_ID),
+        "id": DEAL_ID,
+        "client_id": CLIENT_ID,
+        "apartment_id": APARTMENT_ID,
     }
 
 
@@ -106,29 +105,29 @@ def make_consumer(dialog_service: Mock, publisher: Mock) -> tuple[AgentConsumer,
 def test_dialog_request_schemas_and_selected_text_normalization() -> None:
     analyze = DialogAnalyzeRequest.model_validate(
         {
-            "request_id": str(REQUEST_ID),
+            "request_id": REQUEST_ID,
             "action": "dialog.analyze",
-            "payload": {"deal_id": str(DEAL_ID), "user_id": str(USER_ID)},
+            "payload": {"deal_id": DEAL_ID, "user_id": USER_ID},
         }
     )
     selected = DialogReplyAssistRequest.model_validate(
         {
-            "request_id": str(REQUEST_ID),
+            "request_id": REQUEST_ID,
             "action": "dialog.reply_assist",
             "payload": {
-                "deal_id": str(DEAL_ID),
-                "user_id": str(USER_ID),
+                "deal_id": DEAL_ID,
+                "user_id": USER_ID,
                 "selected_text": "  У конкурента дешевле  ",
             },
         }
     )
     blank = DialogReplyAssistRequest.model_validate(
         {
-            "request_id": str(REQUEST_ID),
+            "request_id": REQUEST_ID,
             "action": "dialog.reply_assist",
             "payload": {
-                "deal_id": str(DEAL_ID),
-                "user_id": str(USER_ID),
+                "deal_id": DEAL_ID,
+                "user_id": USER_ID,
                 "selected_text": "   ",
             },
         }
@@ -143,11 +142,11 @@ def test_dialog_request_rejects_wrong_action_and_extra_fields() -> None:
     with pytest.raises(ValidationError):
         DialogAnalyzeRequest.model_validate(
             {
-                "request_id": str(REQUEST_ID),
+                "request_id": REQUEST_ID,
                 "action": "chat",
                 "payload": {
-                    "deal_id": str(DEAL_ID),
-                    "user_id": str(USER_ID),
+                    "deal_id": DEAL_ID,
+                    "user_id": USER_ID,
                     "message": "лишнее поле",
                 },
             }
@@ -192,12 +191,12 @@ async def test_dialog_analyze_uses_only_client_messages_and_saves_preferences() 
                 {
                     "messages": [
                         {
-                            "id": str(uuid4()),
+                            "id": 601,
                             "direction": "manager_to_client",
                             "body": "Менеджер предлагает три комнаты.",
                         },
                         {
-                            "id": str(uuid4()),
+                            "id": 602,
                             "direction": "client_to_manager",
                             "body": "Мне нужны две комнаты до 15 миллионов.",
                         },
@@ -297,17 +296,17 @@ async def test_reply_assist_never_runs_analytics_preference_update() -> None:
 async def test_reply_assist_selects_last_client_message_not_manager_message() -> None:
     messages = [
         {
-            "id": str(uuid4()),
+            "id": 603,
             "direction": "client_to_manager",
             "body": "Первое сообщение клиента",
         },
         {
-            "id": str(uuid4()),
+            "id": 604,
             "direction": "client_to_manager",
             "body": "Последнее сообщение клиента",
         },
         {
-            "id": str(uuid4()),
+            "id": 605,
             "direction": "manager_to_client",
             "body": "Последнее сообщение менеджера",
         },
@@ -386,8 +385,8 @@ async def test_negotiation_reply_assist_uses_factual_context() -> None:
         get_apartment=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(APARTMENT_ID),
-                    "building_id": str(BUILDING_ID),
+                    "id": APARTMENT_ID,
+                    "building_id": BUILDING_ID,
                     "price": 14_200_000,
                 }
             )
@@ -397,7 +396,7 @@ async def test_negotiation_reply_assist_uses_factual_context() -> None:
         get_building=AsyncMock(
             return_value=backend_response(
                 {
-                    "id": str(BUILDING_ID),
+                    "id": BUILDING_ID,
                     "district": "Центральный",
                     "planned_delivery": "2027-06-01",
                 }
@@ -440,6 +439,128 @@ async def test_negotiation_reply_assist_uses_factual_context() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reply_assist_retries_unsupported_layout_claim() -> None:
+    llm = Mock(
+        parse_structured=AsyncMock(
+            return_value=ReplyAssistAnalysis(
+                intent="competitor_comparison",
+                summary="Клиент сравнивает цену с конкурентом.",
+            )
+        ),
+        generate=AsyncMock(
+            side_effect=[
+                "У нас больше вариантов отделки и разнообразие планировок.",
+                "У нас больше вариантов отделки.",
+            ]
+        ),
+    )
+    apartment_tools = Mock(
+        get_apartment=AsyncMock(
+            return_value=backend_response(
+                {"id": APARTMENT_ID, "building_id": BUILDING_ID}
+            )
+        )
+    )
+    building_tools = Mock(
+        get_building=AsyncMock(
+            return_value=backend_response(
+                {"id": BUILDING_ID, "district": "Центральный"}
+            )
+        )
+    )
+    competitor_tools = Mock(
+        list_competitors=AsyncMock(
+            return_value=backend_response(
+                {
+                    "competitors": [
+                        {
+                            "project_name": "ЖК Конкурент",
+                            "district": "Центральный",
+                            "disadvantages": "Меньше вариантов отделки",
+                        }
+                    ]
+                }
+            )
+        )
+    )
+    agent = NegotiationAgent(
+        llm,
+        Mock(),
+        apartment_tools,
+        building_tools,
+        competitor_tools,
+    )
+
+    _, reply = await agent.reply_assist(
+        "У конкурента дешевле",
+        DealFacts.model_validate(deal_data()),
+    )
+
+    assert "вариантов отделки" in reply
+    assert "планиров" not in reply.casefold()
+    assert llm.generate.await_count == 2
+    first_prompt = llm.generate.await_args_list[0].args[0]
+    assert "Разрешённые факты" in first_prompt
+    assert "Меньше вариантов отделки" in first_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "unsupported_reply",
+    [
+        "Рядом есть метро и удобный транспорт.",
+        "Доступна выгодная ипотека и большая скидка.",
+        "Рядом развитая инфраструктура, школы и магазины.",
+    ],
+)
+async def test_reply_assist_rejects_other_unconfirmed_advantages(
+    unsupported_reply: str,
+) -> None:
+    llm = Mock(
+        parse_structured=AsyncMock(
+            return_value=ReplyAssistAnalysis(
+                intent="price_objection",
+                summary="Клиент считает цену высокой.",
+            )
+        ),
+        generate=AsyncMock(
+            side_effect=[unsupported_reply, "Для сравнения недостаточно данных."],
+        ),
+    )
+    agent = NegotiationAgent(
+        llm,
+        Mock(),
+        Mock(
+            get_apartment=AsyncMock(
+                return_value=backend_response(
+                    {"id": APARTMENT_ID, "building_id": BUILDING_ID}
+                )
+            )
+        ),
+        Mock(
+            get_building=AsyncMock(
+                return_value=backend_response(
+                    {"id": BUILDING_ID, "district": "Центральный"}
+                )
+            )
+        ),
+        Mock(
+            list_competitors=AsyncMock(
+                return_value=backend_response({"competitors": []})
+            )
+        ),
+    )
+
+    _, reply = await agent.reply_assist(
+        "Клиент считает цену высокой",
+        DealFacts.model_validate(deal_data()),
+    )
+
+    assert reply == "Для сравнения недостаточно данных."
+    assert llm.generate.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_invalid_reply_analysis_has_safe_fallback() -> None:
     llm = Mock(
         parse_structured=AsyncMock(side_effect=[ValueError("bad"), ValueError("bad")]),
@@ -451,14 +572,14 @@ async def test_invalid_reply_analysis_has_safe_fallback() -> None:
         Mock(
             get_apartment=AsyncMock(
                 return_value=backend_response(
-                    {"id": str(APARTMENT_ID), "building_id": str(BUILDING_ID)}
+                    {"id": APARTMENT_ID, "building_id": BUILDING_ID}
                 )
             )
         ),
         Mock(
             get_building=AsyncMock(
                 return_value=backend_response(
-                    {"id": str(BUILDING_ID), "district": "Центральный"}
+                    {"id": BUILDING_ID, "district": "Центральный"}
                 )
             )
         ),
@@ -487,9 +608,9 @@ async def test_dialog_analyze_consumer_bypasses_router_and_publishes_structure()
     publisher = Mock(publish=AsyncMock())
     consumer, router = make_consumer(dialog_service, publisher)
     body = {
-        "request_id": str(REQUEST_ID),
+        "request_id": REQUEST_ID,
         "action": "dialog.analyze",
-        "payload": {"deal_id": str(DEAL_ID), "user_id": str(USER_ID)},
+        "payload": {"deal_id": DEAL_ID, "user_id": USER_ID},
     }
     message = make_message(body, "agent.dialog.analyze")
 
@@ -521,11 +642,11 @@ async def test_reply_assist_consumer_bypasses_router() -> None:
     publisher = Mock(publish=AsyncMock())
     consumer, router = make_consumer(dialog_service, publisher)
     body = {
-        "request_id": str(REQUEST_ID),
+        "request_id": REQUEST_ID,
         "action": "dialog.reply_assist",
         "payload": {
-            "deal_id": str(DEAL_ID),
-            "user_id": str(USER_ID),
+            "deal_id": DEAL_ID,
+            "user_id": USER_ID,
             "selected_text": "  Дорого  ",
         },
     }
@@ -544,9 +665,9 @@ async def test_dialog_invalid_request_returns_validation_error() -> None:
     publisher = Mock(publish=AsyncMock())
     consumer, _ = make_consumer(Mock(), publisher)
     body = {
-        "request_id": str(REQUEST_ID),
+        "request_id": REQUEST_ID,
         "action": "dialog.analyze",
-        "payload": {"deal_id": "invalid", "user_id": str(USER_ID)},
+        "payload": {"deal_id": "invalid", "user_id": USER_ID},
     }
 
     await consumer.handle_message(make_message(body, "agent.dialog.analyze"))
@@ -564,9 +685,9 @@ async def test_dialog_backend_timeout_uses_existing_retry_policy() -> None:
     publisher = Mock(publish=AsyncMock(), retry=AsyncMock())
     consumer, _ = make_consumer(dialog_service, publisher)
     body = {
-        "request_id": str(REQUEST_ID),
+        "request_id": REQUEST_ID,
         "action": "dialog.analyze",
-        "payload": {"deal_id": str(DEAL_ID), "user_id": str(USER_ID)},
+        "payload": {"deal_id": DEAL_ID, "user_id": USER_ID},
     }
     message = make_message(body, "agent.dialog.analyze")
 
@@ -584,9 +705,9 @@ async def test_dialog_gigachat_error_uses_existing_retry_policy() -> None:
     publisher = Mock(publish=AsyncMock(), retry=AsyncMock())
     consumer, _ = make_consumer(dialog_service, publisher)
     body = {
-        "request_id": str(REQUEST_ID),
+        "request_id": REQUEST_ID,
         "action": "dialog.reply_assist",
-        "payload": {"deal_id": str(DEAL_ID), "user_id": str(USER_ID)},
+        "payload": {"deal_id": DEAL_ID, "user_id": USER_ID},
     }
     message = make_message(body, "agent.dialog.reply_assist")
 
@@ -611,9 +732,9 @@ async def test_dialog_controlled_errors_are_returned_without_hallucinated_data()
         publisher = Mock(publish=AsyncMock())
         consumer, _ = make_consumer(dialog_service, publisher)
         body = {
-            "request_id": str(REQUEST_ID),
+            "request_id": REQUEST_ID,
             "action": "dialog.analyze",
-            "payload": {"deal_id": str(DEAL_ID), "user_id": str(USER_ID)},
+            "payload": {"deal_id": DEAL_ID, "user_id": USER_ID},
         }
 
         await consumer.handle_message(make_message(body, "agent.dialog.analyze"))

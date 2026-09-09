@@ -9,7 +9,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import aio_pika
 from aio_pika import ExchangeType
@@ -24,7 +24,7 @@ ROUTING_KEY = "event.construction.delay_detected"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("building_id", type=UUID)
+    parser.add_argument("building_id", type=int)
     parser.add_argument("--delay-days", type=int, required=True)
     parser.add_argument(
         "--risk-level",
@@ -40,13 +40,13 @@ def parse_args() -> argparse.Namespace:
 async def publish(args: argparse.Namespace) -> None:
     settings = get_settings()
     connection: AbstractRobustConnection | None = None
-    event_id = uuid4()
+    event_id = f"event_{uuid4().hex}"
     event = {
-        "event_id": str(event_id),
+        "event_id": event_id,
         "event_type": "construction.delay_detected",
         "occurred_at": datetime.now(timezone.utc).isoformat(),
         "payload": {
-            "building_id": str(args.building_id),
+            "building_id": args.building_id,
             "delay_days": args.delay_days,
             "risk_level": args.risk_level,
         },

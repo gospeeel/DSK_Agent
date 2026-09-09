@@ -1,6 +1,5 @@
 import logging
 from typing import Literal, TypedDict
-from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
 
@@ -16,8 +15,8 @@ TEMPORARY_BACKEND_CODES = {"TIMEOUT", "PUBLISH_ERROR", "BACKEND_UNAVAILABLE"}
 
 class OfferContinuationState(TypedDict, total=False):
     event_type: Literal["offer.approved", "offer.rejected"]
-    offer_id: UUID
-    deal_id: UUID
+    offer_id: int
+    deal_id: int
     reason: str
     offer: OfferLookupData
     document_url: str
@@ -54,8 +53,8 @@ class OfferContinuationGraph:
         self,
         *,
         event_type: Literal["offer.approved", "offer.rejected"],
-        offer_id: UUID,
-        deal_id: UUID,
+        offer_id: int,
+        deal_id: int,
         reason: str | None = None,
     ) -> OfferContinuationState:
         initial: OfferContinuationState = {

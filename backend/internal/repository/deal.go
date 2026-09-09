@@ -16,6 +16,37 @@ type DealRepository interface {
 	GetDealByID(ctx context.Context, id int) (*domain.Deal, error)
 	GetDeals(ctx context.Context, userID *int, employeeID *int, status *domain.DealStatus) ([]*domain.Deal, error)
 	UpdateDealStatus(ctx context.Context, id int, status domain.DealStatus, discount *float64, totalPrice *float64) (*domain.Deal, error)
+	GetDealsByBuildingID(ctx context.Context, buildingID int) ([]*domain.Deal, error)
+}
+
+func (r *dealRepository) GetDealsByBuildingID(ctx context.Context, buildingID int) ([]*domain.Deal, error) {
+	query := `
+		SELECT d.id, d.id_user, d.id_employee, d.id_apartment, d.id_chat_session,
+		       d.base_price, d.percent_discount, d.total_price, d.status,
+		       d.created_at, d.updated_at
+		FROM deals d
+		JOIN apartments a ON a.id = d.id_apartment
+		WHERE a.building_id = $1
+		ORDER BY d.id
+	`
+	rows, err := r.db.Query(ctx, query, buildingID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	deals := make([]*domain.Deal, 0)
+	for rows.Next() {
+		var deal domain.Deal
+		if err := rows.Scan(
+			&deal.ID, &deal.UserID, &deal.EmployeeID, &deal.ApartmentID,
+			&deal.ChatSessionID, &deal.BasePrice, &deal.PercentDiscount,
+			&deal.TotalPrice, &deal.Status, &deal.CreatedAt, &deal.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		deals = append(deals, &deal)
+	}
+	return deals, rows.Err()
 }
 
 type dealRepository struct {
@@ -28,15 +59,16 @@ func NewDealRepository(db *pgxpool.Pool) DealRepository {
 
 func (r *dealRepository) CreateDeal(ctx context.Context, deal *domain.Deal) (*domain.Deal, error) {
 	query := `
-		INSERT INTO deals (id_user, id_employee, id_apartment, base_price, percent_discount, total_price, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-		RETURNING id, id_user, id_employee, id_apartment, base_price, percent_discount, total_price, status, created_at, updated_at
+		INSERT INTO deals (id_user, id_employee, id_apartment, id_chat_session, base_price, percent_discount, total_price, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+		RETURNING id, id_user, id_employee, id_apartment, id_chat_session, base_price, percent_discount, total_price, status, created_at, updated_at
 	`
 	var d domain.Deal
 	err := r.db.QueryRow(ctx, query,
 		deal.UserID,
 		deal.EmployeeID,
 		deal.ApartmentID,
+		deal.ChatSessionID,
 		deal.BasePrice,
 		deal.PercentDiscount,
 		deal.TotalPrice,
@@ -46,6 +78,7 @@ func (r *dealRepository) CreateDeal(ctx context.Context, deal *domain.Deal) (*do
 		&d.UserID,
 		&d.EmployeeID,
 		&d.ApartmentID,
+		&d.ChatSessionID,
 		&d.BasePrice,
 		&d.PercentDiscount,
 		&d.TotalPrice,
@@ -62,7 +95,7 @@ func (r *dealRepository) CreateDeal(ctx context.Context, deal *domain.Deal) (*do
 func (r *dealRepository) GetDealByID(ctx context.Context, id int) (*domain.Deal, error) {
 	query := `
 		SELECT 
-			d.id, d.id_user, d.id_employee, d.id_apartment, 
+			d.id, d.id_user, d.id_employee, d.id_apartment, d.id_chat_session,
 			d.base_price, d.percent_discount, d.total_price, d.status, 
 			d.created_at, d.updated_at,
 			u.name AS user_name,
@@ -80,6 +113,7 @@ func (r *dealRepository) GetDealByID(ctx context.Context, id int) (*domain.Deal,
 		&d.UserID,
 		&d.EmployeeID,
 		&d.ApartmentID,
+		&d.ChatSessionID,
 		&d.BasePrice,
 		&d.PercentDiscount,
 		&d.TotalPrice,
@@ -102,7 +136,7 @@ func (r *dealRepository) GetDealByID(ctx context.Context, id int) (*domain.Deal,
 func (r *dealRepository) GetDeals(ctx context.Context, userID *int, employeeID *int, status *domain.DealStatus) ([]*domain.Deal, error) {
 	query := `
 		SELECT 
-			d.id, d.id_user, d.id_employee, d.id_apartment, 
+			d.id, d.id_user, d.id_employee, d.id_apartment, d.id_chat_session,
 			d.base_price, d.percent_discount, d.total_price, d.status, 
 			d.created_at, d.updated_at,
 			u.name AS user_name,
@@ -137,6 +171,7 @@ func (r *dealRepository) GetDeals(ctx context.Context, userID *int, employeeID *
 			&d.UserID,
 			&d.EmployeeID,
 			&d.ApartmentID,
+			&d.ChatSessionID,
 			&d.BasePrice,
 			&d.PercentDiscount,
 			&d.TotalPrice,
@@ -168,7 +203,7 @@ func (r *dealRepository) UpdateDealStatus(ctx context.Context, id int, status do
 		    total_price = COALESCE($3, total_price),
 		    updated_at = NOW()
 		WHERE id = $4
-		RETURNING id, id_user, id_employee, id_apartment, base_price, percent_discount, total_price, status, created_at, updated_at
+		RETURNING id, id_user, id_employee, id_apartment, id_chat_session, base_price, percent_discount, total_price, status, created_at, updated_at
 	`
 	var d domain.Deal
 	err := r.db.QueryRow(ctx, query, status, discount, totalPrice, id).Scan(
@@ -176,6 +211,7 @@ func (r *dealRepository) UpdateDealStatus(ctx context.Context, id int, status do
 		&d.UserID,
 		&d.EmployeeID,
 		&d.ApartmentID,
+		&d.ChatSessionID,
 		&d.BasePrice,
 		&d.PercentDiscount,
 		&d.TotalPrice,

@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from app.broker.backend_rpc import BackendRpcClient
 from app.schemas.backend import BackendResponse
 
@@ -10,11 +8,11 @@ class MessagesTools:
 
     async def get_deal_messages(
         self,
-        deal_id: UUID,
+        deal_id: int,
         limit: int = 30,
     ) -> BackendResponse:
         return await self._rpc.call(
             routing_key="backend.deal.messages.get",
             action="deal.messages.get",
-            payload={"deal_id": str(deal_id), "limit": limit},
+            payload={"deal_id": deal_id, "limit": limit},
         )

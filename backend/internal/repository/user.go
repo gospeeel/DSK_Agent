@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"backend/internal/domain"
@@ -17,6 +18,7 @@ type UserRepository interface {
 	GetUserByID(ctx context.Context, id int) (*domain.User, error)
 	GetAllUsers(ctx context.Context) ([]*domain.User, error)
 	UpdateUser(ctx context.Context, user *domain.User) error
+	UpdateClientPreferences(ctx context.Context, id int, budgetMax *int64, preferences map[string]any) (*domain.ClientPreferences, error)
 }
 
 type userRepository struct {
@@ -51,13 +53,18 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 }
 
 func (r *userRepository) GetUserByID(ctx context.Context, id int) (*domain.User, error) {
-	query := `SELECT id, name, email, password_hash, role FROM users WHERE id = $1`
+	query := `SELECT id, name, email, password_hash, role, budget_max, preferences FROM users WHERE id = $1`
 	var user domain.User
-	err := r.db.QueryRow(ctx, query, id).Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role)
+	var rawPreferences []byte
+	err := r.db.QueryRow(ctx, query, id).Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role, &user.BudgetMax, &rawPreferences)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUserNotFound
 		}
+		return nil, err
+	}
+	user.Preferences, err = domain.DecodePreferences(rawPreferences)
+	if err != nil {
 		return nil, err
 	}
 	return &user, nil
@@ -86,4 +93,41 @@ func (r *userRepository) UpdateUser(ctx context.Context, user *domain.User) erro
 	query := `UPDATE users SET name = $1, email = $2, password_hash = $3 WHERE id = $4`
 	_, err := r.db.Exec(ctx, query, user.Name, user.Email, user.PasswordHash, user.ID)
 	return err
+}
+
+func (r *userRepository) UpdateClientPreferences(
+	ctx context.Context,
+	id int,
+	budgetMax *int64,
+	preferences map[string]any,
+) (*domain.ClientPreferences, error) {
+	patch, err := json.Marshal(preferences)
+	if err != nil {
+		return nil, err
+	}
+	query := `
+		UPDATE users
+		SET budget_max = COALESCE($2, budget_max),
+		    preferences = preferences || $3::jsonb
+		WHERE id = $1
+		RETURNING id, budget_max, preferences
+	`
+	var result domain.ClientPreferences
+	var rawPreferences []byte
+	err = r.db.QueryRow(ctx, query, id, budgetMax, patch).Scan(
+		&result.ClientID,
+		&result.BudgetMax,
+		&rawPreferences,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	result.Preferences, err = domain.DecodePreferences(rawPreferences)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

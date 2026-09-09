@@ -1,8 +1,8 @@
 from typing import Literal
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.identifiers import BusinessId
 from app.schemas.negotiation import ApartmentFacts, BuildingFacts, DealFacts
 
 
@@ -13,6 +13,7 @@ class ConstructionEventFacts(BaseModel):
     title: str = Field(min_length=1)
     risk_level: str = Field(min_length=1)
     delay_days: int | None = Field(default=None, ge=0)
+    completion_percentage: int | None = Field(default=None, ge=0, le=100)
 
 
 class ConstructionEventsData(BaseModel):
@@ -33,8 +34,8 @@ class AnalyticsContext(BaseModel):
 class AffectedDeal(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    id: UUID
-    status: Literal["active", "closed", "cancelled"]
+    id: BusinessId
+    status: Literal["pending", "contract", "completed", "cancelled"]
 
 
 class AffectedDealsData(BaseModel):
@@ -47,7 +48,7 @@ class ConstructionDelayContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     deal: DealFacts
-    building_id: UUID
+    building_id: BusinessId
     delay_days: int = Field(ge=1)
     risk_level: Literal["low", "medium", "high"]
 
@@ -55,5 +56,5 @@ class ConstructionDelayContext(BaseModel):
 class RecommendationCreatedData(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    recommendation_id: UUID
+    recommendation_id: BusinessId
     created: bool

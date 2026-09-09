@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"backend/internal/broker"
 	"backend/internal/config"
 	"backend/internal/handler"
 	"backend/internal/repository"
@@ -49,15 +50,47 @@ func main() {
 	dealRepo := repository.NewDealRepository(dbpool)
 	dealService := service.NewDealService(dealRepo)
 	dealHandler := handler.NewDealHandler(dealService)
+	dialogAnalysisService := service.NewDialogAnalysisService(dealRepo, chatRepo)
+	competitorRepo := repository.NewCompetitorRepository(dbpool)
+	recommendationRepo := repository.NewRecommendationRepository(dbpool)
+	offerRepo := repository.NewOfferRepository(dbpool)
+	offerService, err := service.NewOfferService(
+		dealRepo,
+		userRepo,
+		offerRepo,
+		cfg.MaxManagerDiscountPercent,
+		cfg.MaxSupervisorDiscountPercent,
+	)
+	if err != nil {
+		log.Fatalf("Invalid offer discount policy: %v\n", err)
+	}
 
 	aiService := service.NewAIAgentService(cfg.RabbitMQURL)
 	defer aiService.Close()
 	aiHandler := handler.NewAIHandler(aiService, chatService)
 
+	backendRPCDispatcher := broker.NewBackendRPCDispatcher(
+		dealService,
+		userService,
+		constructionService,
+		dialogAnalysisService,
+		userService,
+		constructionService,
+		dealService,
+		competitorRepo,
+		recommendationRepo,
+		offerService,
+	)
+	backendRPCConsumer := broker.NewBackendRPCConsumer(aiService, backendRPCDispatcher)
+	if err := backendRPCConsumer.Start(context.Background()); err != nil {
+		log.Fatalf("Unable to start Backend RPC consumer: %v\n", err)
+	}
+	defer backendRPCConsumer.Close()
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		AllowCredentials: true,
@@ -68,7 +101,7 @@ func main() {
 		http.Redirect(w, r, "/swagger/", http.StatusMovedPermanently)
 	})
 	r.Get("/swagger/*", swagger.Handler(swagger.StaffSpec, "Staff Server API - Swagger UI"))
-	
+
 	r.Post("/api/auth/register", authHandler.CreateStaff)
 	r.Post("/api/auth/login", authHandler.LoginStaff)
 	r.Post("/api/auth/logout", authHandler.Logout)
@@ -76,7 +109,7 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(authHandler.AuthMiddleware)
 		r.Use(authHandler.RequireStaffRole)
-		
+
 		r.Get("/api/staff/profile", authHandler.Profile)
 		r.Get("/api/users", userHandler.GetUsers)
 		r.Get("/api/users/{id}", userHandler.GetUser)

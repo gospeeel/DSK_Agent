@@ -111,23 +111,52 @@ func (r *postgresConstructionRepository) DeleteResidentialComplex(ctx context.Co
 // === Buildings ===
 
 func (r *postgresConstructionRepository) CreateBuilding(ctx context.Context, b *domain.Building) error {
-	query := `INSERT INTO buildings (residential_complex_id, address, latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`
-	return r.db.QueryRow(ctx, query, b.ResidentialComplexID, b.Address, b.Latitude, b.Longitude, b.FloorsCount, b.PlannedDate, b.ActualDate, b.Status, b.TypeWallMaterial).Scan(&b.ID)
+	query := `INSERT INTO buildings (residential_complex_id, address, district, latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`
+	return r.db.QueryRow(ctx, query, b.ResidentialComplexID, b.Address, b.District, b.Latitude, b.Longitude, b.FloorsCount, b.PlannedDate, b.ActualDate, b.Status, b.TypeWallMaterial).Scan(&b.ID)
 }
 
 func (r *postgresConstructionRepository) GetBuildingByID(ctx context.Context, id int) (*domain.Building, error) {
-	query := `SELECT id, residential_complex_id, address, latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material FROM buildings WHERE id = $1`
-	var b domain.Building
-	err := r.db.QueryRow(ctx, query, id).Scan(&b.ID, &b.ResidentialComplexID, &b.Address, &b.Latitude, &b.Longitude, &b.FloorsCount, &b.PlannedDate, &b.ActualDate, &b.Status, &b.TypeWallMaterial)
+	query := `SELECT id, residential_complex_id, address, COALESCE(district, ''), latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material FROM buildings WHERE id = $1`
+	b, err := scanBuilding(r.db.QueryRow(ctx, query, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrBuildingNotFound
+	}
+	return b, err
+}
+
+type buildingRow interface {
+	Scan(dest ...any) error
+}
+
+func scanBuilding(row buildingRow) (*domain.Building, error) {
+	var b domain.Building
+	var latitude *float64
+	var longitude *float64
+	err := row.Scan(
+		&b.ID,
+		&b.ResidentialComplexID,
+		&b.Address,
+		&b.District,
+		&latitude,
+		&longitude,
+		&b.FloorsCount,
+		&b.PlannedDate,
+		&b.ActualDate,
+		&b.Status,
+		&b.TypeWallMaterial,
+	)
+	if latitude != nil {
+		b.Latitude = *latitude
+	}
+	if longitude != nil {
+		b.Longitude = *longitude
 	}
 	return &b, err
 }
 
 func (r *postgresConstructionRepository) GetBuildingsByComplexID(ctx context.Context, complexID int) ([]*domain.Building, error) {
-	query := `SELECT id, residential_complex_id, address, latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material FROM buildings WHERE residential_complex_id = $1`
+	query := `SELECT id, residential_complex_id, address, COALESCE(district, ''), latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material FROM buildings WHERE residential_complex_id = $1`
 	rows, err := r.db.Query(ctx, query, complexID)
 	if err != nil {
 		return nil, err
@@ -137,7 +166,7 @@ func (r *postgresConstructionRepository) GetBuildingsByComplexID(ctx context.Con
 	var buildings []*domain.Building
 	for rows.Next() {
 		var b domain.Building
-		if err := rows.Scan(&b.ID, &b.ResidentialComplexID, &b.Address, &b.Latitude, &b.Longitude, &b.FloorsCount, &b.PlannedDate, &b.ActualDate, &b.Status, &b.TypeWallMaterial); err != nil {
+		if err := rows.Scan(&b.ID, &b.ResidentialComplexID, &b.Address, &b.District, &b.Latitude, &b.Longitude, &b.FloorsCount, &b.PlannedDate, &b.ActualDate, &b.Status, &b.TypeWallMaterial); err != nil {
 			return nil, err
 		}
 		buildings = append(buildings, &b)
@@ -146,8 +175,8 @@ func (r *postgresConstructionRepository) GetBuildingsByComplexID(ctx context.Con
 }
 
 func (r *postgresConstructionRepository) UpdateBuilding(ctx context.Context, b *domain.Building) error {
-	query := `UPDATE buildings SET residential_complex_id = $1, address = $2, latitude = $3, longitude = $4, floors_count = $5, planned_date = $6, actual_date = $7, status = $8, type_wall_material = $9 WHERE id = $10`
-	cmd, err := r.db.Exec(ctx, query, b.ResidentialComplexID, b.Address, b.Latitude, b.Longitude, b.FloorsCount, b.PlannedDate, b.ActualDate, b.Status, b.TypeWallMaterial, b.ID)
+	query := `UPDATE buildings SET residential_complex_id = $1, address = $2, district = $3, latitude = $4, longitude = $5, floors_count = $6, planned_date = $7, actual_date = $8, status = $9, type_wall_material = $10 WHERE id = $11`
+	cmd, err := r.db.Exec(ctx, query, b.ResidentialComplexID, b.Address, b.District, b.Latitude, b.Longitude, b.FloorsCount, b.PlannedDate, b.ActualDate, b.Status, b.TypeWallMaterial, b.ID)
 	if err == nil && cmd.RowsAffected() == 0 {
 		return ErrBuildingNotFound
 	}
@@ -220,15 +249,15 @@ func (r *postgresConstructionRepository) DeleteApartment(ctx context.Context, id
 // === Construction Progress ===
 
 func (r *postgresConstructionRepository) CreateProgress(ctx context.Context, p *domain.ConstructionProgress) error {
-	query := `INSERT INTO construction_progress (building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, delay_reason)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`
-	return r.db.QueryRow(ctx, query, p.BuildingID, p.StageName, p.PlannedStartDate, p.ActualStartDate, p.PlannedEndDate, p.ActualEndDate, p.Status, p.CompletionPercentage, p.DelayReason).Scan(&p.ID)
+	query := `INSERT INTO construction_progress (building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, delay_reason, risk_level, delay_days)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`
+	return r.db.QueryRow(ctx, query, p.BuildingID, p.StageName, p.PlannedStartDate, p.ActualStartDate, p.PlannedEndDate, p.ActualEndDate, p.Status, p.CompletionPercentage, p.DelayReason, p.RiskLevel, p.DelayDays).Scan(&p.ID)
 }
 
 func (r *postgresConstructionRepository) GetProgressByID(ctx context.Context, id int) (*domain.ConstructionProgress, error) {
-	query := `SELECT id, building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, delay_reason FROM construction_progress WHERE id = $1`
+	query := `SELECT id, building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, delay_reason, risk_level, delay_days FROM construction_progress WHERE id = $1`
 	var p domain.ConstructionProgress
-	err := r.db.QueryRow(ctx, query, id).Scan(&p.ID, &p.BuildingID, &p.StageName, &p.PlannedStartDate, &p.ActualStartDate, &p.PlannedEndDate, &p.ActualEndDate, &p.Status, &p.CompletionPercentage, &p.DelayReason)
+	err := r.db.QueryRow(ctx, query, id).Scan(&p.ID, &p.BuildingID, &p.StageName, &p.PlannedStartDate, &p.ActualStartDate, &p.PlannedEndDate, &p.ActualEndDate, &p.Status, &p.CompletionPercentage, &p.DelayReason, &p.RiskLevel, &p.DelayDays)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrProgressNotFound
 	}
@@ -236,7 +265,7 @@ func (r *postgresConstructionRepository) GetProgressByID(ctx context.Context, id
 }
 
 func (r *postgresConstructionRepository) GetProgressByBuildingID(ctx context.Context, buildingID int) ([]*domain.ConstructionProgress, error) {
-	query := `SELECT id, building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, delay_reason FROM construction_progress WHERE building_id = $1`
+	query := `SELECT id, building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, delay_reason, risk_level, delay_days FROM construction_progress WHERE building_id = $1 ORDER BY COALESCE(planned_start_date, actual_start_date), id`
 	rows, err := r.db.Query(ctx, query, buildingID)
 	if err != nil {
 		return nil, err
@@ -246,7 +275,7 @@ func (r *postgresConstructionRepository) GetProgressByBuildingID(ctx context.Con
 	var progresses []*domain.ConstructionProgress
 	for rows.Next() {
 		var p domain.ConstructionProgress
-		if err := rows.Scan(&p.ID, &p.BuildingID, &p.StageName, &p.PlannedStartDate, &p.ActualStartDate, &p.PlannedEndDate, &p.ActualEndDate, &p.Status, &p.CompletionPercentage, &p.DelayReason); err != nil {
+		if err := rows.Scan(&p.ID, &p.BuildingID, &p.StageName, &p.PlannedStartDate, &p.ActualStartDate, &p.PlannedEndDate, &p.ActualEndDate, &p.Status, &p.CompletionPercentage, &p.DelayReason, &p.RiskLevel, &p.DelayDays); err != nil {
 			return nil, err
 		}
 		progresses = append(progresses, &p)
@@ -255,8 +284,8 @@ func (r *postgresConstructionRepository) GetProgressByBuildingID(ctx context.Con
 }
 
 func (r *postgresConstructionRepository) UpdateProgress(ctx context.Context, p *domain.ConstructionProgress) error {
-	query := `UPDATE construction_progress SET building_id = $1, stage_name = $2, planned_start_date = $3, actual_start_date = $4, planned_end_date = $5, actual_end_date = $6, status = $7, completion_percentage = $8, delay_reason = $9 WHERE id = $10`
-	cmd, err := r.db.Exec(ctx, query, p.BuildingID, p.StageName, p.PlannedStartDate, p.ActualStartDate, p.PlannedEndDate, p.ActualEndDate, p.Status, p.CompletionPercentage, p.DelayReason, p.ID)
+	query := `UPDATE construction_progress SET building_id = $1, stage_name = $2, planned_start_date = $3, actual_start_date = $4, planned_end_date = $5, actual_end_date = $6, status = $7, completion_percentage = $8, delay_reason = $9, risk_level = $10, delay_days = $11 WHERE id = $12`
+	cmd, err := r.db.Exec(ctx, query, p.BuildingID, p.StageName, p.PlannedStartDate, p.ActualStartDate, p.PlannedEndDate, p.ActualEndDate, p.Status, p.CompletionPercentage, p.DelayReason, p.RiskLevel, p.DelayDays, p.ID)
 	if err == nil && cmd.RowsAffected() == 0 {
 		return ErrProgressNotFound
 	}

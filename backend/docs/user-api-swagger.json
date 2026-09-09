@@ -65,11 +65,11 @@
       },
       "AIChatRequest": {
         "type": "object",
-        "required": ["message"],
+        "required": ["message", "session_id"],
         "properties": {
           "message": { "type": "string", "example": "Привет! Расскажи, чем ты можешь помочь?" },
-          "session_id": { "type": "string", "example": "1" },
-          "deal_id": { "type": "string", "nullable": true, "example": null }
+          "session_id": { "type": "integer", "example": 1 },
+          "deal_id": { "type": "integer", "nullable": true, "example": null }
         }
       },
       "AIChatResponse": {
@@ -250,6 +250,14 @@
         "responses": { "200": { "description": "Данные квартиры" } }
       }
     },
+    "/api/progress/{id}": {
+      "get": {
+        "tags": ["Catalog"],
+        "summary": "Получить этап строительства",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Этап строительства" }, "404": { "description": "Этап не найден" } }
+      }
+    },
     "/api/chat/sessions": {
       "post": {
         "tags": ["Chat"],
@@ -331,6 +339,7 @@
       "post": {
         "tags": ["AI"],
         "summary": "Чат с AI Agent (GigaChat) через RabbitMQ RPC",
+        "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
           "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AIChatRequest" } } }

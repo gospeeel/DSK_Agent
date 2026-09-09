@@ -18,6 +18,11 @@ type DealService interface {
 	GetDealByID(ctx context.Context, id int) (*domain.Deal, error)
 	GetDeals(ctx context.Context, userID *int, employeeID *int, status *domain.DealStatus) ([]*domain.Deal, error)
 	UpdateDealStatus(ctx context.Context, id int, req domain.UpdateDealStatusRequest) (*domain.Deal, error)
+	GetDealsByBuildingID(ctx context.Context, buildingID int) ([]*domain.Deal, error)
+}
+
+func (s *dealService) GetDealsByBuildingID(ctx context.Context, buildingID int) ([]*domain.Deal, error) {
+	return s.dealRepo.GetDealsByBuildingID(ctx, buildingID)
 }
 
 type dealService struct {
@@ -43,6 +48,7 @@ func (s *dealService) CreateDeal(ctx context.Context, req domain.CreateDealReque
 		UserID:          req.UserID,
 		EmployeeID:      employeeID,
 		ApartmentID:     req.ApartmentID,
+		ChatSessionID:   req.ChatSessionID,
 		BasePrice:       req.BasePrice,
 		PercentDiscount: req.PercentDiscount,
 		TotalPrice:      totalPrice,

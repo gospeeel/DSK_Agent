@@ -119,8 +119,8 @@ class DiagnosticRpcClient:
         if timeout <= 0:
             raise ValueError("timeout must be greater than zero")
 
-        request_id = str(uuid4())
-        correlation_id = str(uuid4())
+        request_id = f"req_diagnostic_{uuid4().hex}"
+        correlation_id = f"corr_diagnostic_{uuid4().hex}"
         request = {
             "request_id": request_id,
             "action": action,

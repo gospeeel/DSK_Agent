@@ -1,7 +1,8 @@
 import logging
-from typing import Literal, Protocol
+from typing import Literal, Protocol, TypeVar
 
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel
 
 from app.broker.backend_rpc import BackendRpcError
 from app.graphs.offer_state import OfferState
@@ -19,6 +20,7 @@ from app.tools.deal import DealTools
 from app.tools.offer import OfferTools
 
 logger = logging.getLogger(__name__)
+OfferModelT = TypeVar("OfferModelT", bound=BaseModel)
 
 BACKEND_DATA_ERROR_RESPONSE = (
     "Не удалось получить фактические данные для формирования коммерческого предложения."
@@ -28,8 +30,6 @@ OFFER_SAVE_ERROR_RESPONSE = "Сохранить коммерческое пре�
 APPROVAL_REQUEST_ERROR_RESPONSE = (
     "Предложение подготовлено, но запрос на согласование отправить не удалось."
 )
-APPROVAL_REASON = "Запрошенная скидка превышает лимит менеджера"
-
 OFFER_SYSTEM_PROMPT = """Ты помощник менеджера по продажам недвижимости.
 Сформируй короткий персональный текст коммерческого предложения.
 
@@ -53,6 +53,12 @@ class OfferLlmClient(Protocol):
         *,
         system_prompt: str | None = None,
     ) -> str: ...
+
+    async def parse_structured(
+        self,
+        prompt: str,
+        response_model: type[OfferModelT],
+    ) -> OfferModelT: ...
 
 
 class OfferGraph:
@@ -155,11 +161,14 @@ class OfferGraph:
         try:
             response = await self._offer_tools.calculate_offer(
                 state["deal_id"],
-                state["discount_percent"],
+                state["user_id"],
+                state["requested_discount_percent"],
             )
             calculation = OfferCalculation.model_validate(
                 require_backend_data(response.data)
             )
+            if calculation.deal_id != state["deal_id"]:
+                raise ValueError("offer calculation deal_id does not match")
         except Exception as exc:
             return self._backend_error("calculate_offer", exc)
 
@@ -219,9 +228,7 @@ class OfferGraph:
             created = OfferCreatedData.model_validate(
                 require_backend_data(response.data)
             )
-            expected_status = (
-                "pending_approval" if state["approval_required"] else "created"
-            )
+            expected_status = "draft" if state["approval_required"] else "approved"
             if created.status != expected_status:
                 raise ValueError(
                     f"offer create response status must be {expected_status}"
@@ -235,6 +242,8 @@ class OfferGraph:
             }
         except Exception as exc:
             logger.warning("Offer creation failed: error_type=%s", type(exc).__name__)
+            if isinstance(exc, BackendRpcError) and exc.code == "FORBIDDEN":
+                raise
             return {
                 "error": "OFFER_CREATE_ERROR",
                 "result_message": f"{manager_response}\n\n{OFFER_SAVE_ERROR_RESPONSE}",
@@ -245,14 +254,13 @@ class OfferGraph:
             response = await self._offer_tools.request_offer_approval(
                 state["offer_id"],
                 state["user_id"],
-                APPROVAL_REASON,
             )
             approval = OfferApprovalData.model_validate(
                 require_backend_data(response.data)
             )
             if approval.offer_id != state["offer_id"]:
                 raise ValueError("approval response offer_id does not match")
-            if approval.status != "waiting_approval":
+            if approval.status != "pending_approval":
                 raise ValueError("approval response has unexpected status")
             return {
                 "approval_status": "waiting",
@@ -266,6 +274,8 @@ class OfferGraph:
             logger.warning(
                 "Offer approval request failed: error_type=%s", type(exc).__name__
             )
+            if isinstance(exc, BackendRpcError) and exc.code == "FORBIDDEN":
+                raise
             return {
                 "error": "APPROVAL_REQUEST_ERROR",
                 "result_message": (
@@ -298,6 +308,8 @@ class OfferGraph:
             type(exc).__name__,
             code,
         )
+        if code == "FORBIDDEN":
+            raise exc
         return {
             "error": "BACKEND_DATA_ERROR",
             "result_message": BACKEND_DATA_ERROR_RESPONSE,
@@ -327,7 +339,7 @@ class OfferGraph:
                 ", ".join(apartment_details),
                 f"Базовая стоимость: {OfferGraph._format_money(calculation.base_price)} ₽",
                 f"Скидка: {calculation.discount_percent:g}%",
-                f"Итоговая стоимость: {OfferGraph._format_money(calculation.total_price)} ₽",
+                f"Итоговая стоимость: {OfferGraph._format_money(calculation.final_price)} ₽",
             ]
         )
 

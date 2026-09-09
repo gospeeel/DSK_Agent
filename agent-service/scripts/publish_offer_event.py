@@ -9,7 +9,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import aio_pika
 from aio_pika import ExchangeType
@@ -23,8 +23,8 @@ from app.config import get_settings  # noqa: E402
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("decision", choices=("approved", "rejected"))
-    parser.add_argument("offer_id", type=UUID)
-    parser.add_argument("deal_id", type=UUID)
+    parser.add_argument("offer_id", type=int)
+    parser.add_argument("deal_id", type=int)
     parser.add_argument(
         "--reason",
         default="Предложение отклонено руководителем",
@@ -36,17 +36,17 @@ def parse_args() -> argparse.Namespace:
 async def publish(args: argparse.Namespace) -> None:
     settings = get_settings()
     connection: AbstractRobustConnection | None = None
-    event_id = uuid4()
+    event_id = f"event_{uuid4().hex}"
     routing_key = f"event.offer.{args.decision}"
-    payload: dict[str, str] = {
-        "offer_id": str(args.offer_id),
-        "deal_id": str(args.deal_id),
+    payload: dict[str, str | int] = {
+        "offer_id": args.offer_id,
+        "deal_id": args.deal_id,
     }
     if args.decision == "rejected":
         payload["reason"] = args.reason
 
     event = {
-        "event_id": str(event_id),
+        "event_id": event_id,
         "event_type": f"offer.{args.decision}",
         "occurred_at": datetime.now(timezone.utc).isoformat(),
         "payload": payload,

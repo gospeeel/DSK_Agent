@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from pydantic import ValidationError
 
-from app.agents.router import AgentRouter, RouteDecision
+from app.agents.router import ROUTER_PROMPT, AgentRouter, RouteDecision
 
 
 @pytest.mark.asyncio
@@ -80,3 +80,16 @@ def test_route_intent_must_match_agent() -> None:
             intent="create_offer",
             confidence=0.5,
         )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Сформируй коммерческое предложение",
+        "Сделай КП со скидкой 3%",
+        "Подготовь предложение со скидкой 7 процентов",
+        "Хочу предложить клиенту скидку 10%",
+    ],
+)
+def test_router_prompt_contains_offer_routing_examples(message: str) -> None:
+    assert message in ROUTER_PROMPT

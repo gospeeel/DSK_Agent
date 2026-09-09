@@ -51,8 +51,8 @@ async def wait_for_response(
 
 async def run_rpc_test() -> int:
     settings = get_settings()
-    request_id = str(uuid4())
-    correlation_id = str(uuid4())
+    request_id = f"req_diagnostic_{uuid4().hex}"
+    correlation_id = f"corr_diagnostic_{uuid4().hex}"
     started_at = time.perf_counter()
     connection: AbstractRobustConnection | None = None
 
@@ -63,8 +63,8 @@ async def run_rpc_test() -> int:
         "request_id": request_id,
         "action": "chat",
         "payload": {
-            "user_id": str(uuid4()),
-            "session_id": str(uuid4()),
+            "user_id": 15,
+            "session_id": 42,
             "deal_id": None,
             "message": TEST_MESSAGE,
         },

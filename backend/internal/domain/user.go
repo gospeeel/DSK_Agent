@@ -1,5 +1,7 @@
 package domain
 
+import "encoding/json"
+
 type Role string
 
 const (
@@ -9,11 +11,30 @@ const (
 )
 
 type User struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-	PasswordHash string `json:"-"`
-	Role         Role   `json:"role"`
+	ID           int            `json:"id"`
+	Name         string         `json:"name"`
+	Email        string         `json:"email"`
+	PasswordHash string         `json:"-"`
+	Role         Role           `json:"role"`
+	BudgetMax    *int64         `json:"budget_max,omitempty"`
+	Preferences  map[string]any `json:"preferences,omitempty"`
+}
+
+type ClientPreferences struct {
+	ClientID    int            `json:"client_id"`
+	BudgetMax   *int64         `json:"budget_max,omitempty"`
+	Preferences map[string]any `json:"preferences"`
+}
+
+func DecodePreferences(raw []byte) (map[string]any, error) {
+	preferences := make(map[string]any)
+	if len(raw) == 0 {
+		return preferences, nil
+	}
+	if err := json.Unmarshal(raw, &preferences); err != nil {
+		return nil, err
+	}
+	return preferences, nil
 }
 
 type UpdateUserRequest struct {

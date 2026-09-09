@@ -1,7 +1,6 @@
 import json
 import logging
 from typing import Protocol, cast
-from uuid import UUID
 
 import httpx
 from aio_pika import IncomingMessage
@@ -14,7 +13,7 @@ from app.agents.analytics import ClientFactsExtractionError, NoClientMessagesErr
 from app.agents.dialog import DialogCommandError, DialogService
 from app.agents.negotiation import NegotiationAgent, NegotiationIntent
 from app.agents.offer import OfferAgent, OfferIntent
-from app.agents.router import AgentRouter
+from app.agents.router import AgentRouter, RouteDecision
 from app.broker.publisher import RpcPublisher
 from app.broker.backend_rpc import BackendRpcError, BackendRpcTimeoutError
 from app.schemas.dialog import (
@@ -88,7 +87,7 @@ class AgentConsumer:
             await message.reject(requeue=False)
             return
 
-        if not message.correlation_id:
+        if not message.correlation_id or not message.correlation_id.strip():
             logger.error(
                 "Rejecting RPC request without correlation_id: reply_to=%s",
                 message.reply_to,
@@ -137,33 +136,49 @@ class AgentConsumer:
                     request.request_id,
                     message.correlation_id,
                 )
-                decision = await self._router.route(request.payload.message)
-                if decision.agent == "negotiation":
-                    answer = await self._negotiation_agent.generate(
+                pending_offer = None
+                if self._offer_agent is not None:
+                    pending_offer = await self._offer_agent.resume_pending(
                         request.payload.message,
-                        cast(NegotiationIntent, decision.intent),
-                        request.payload.deal_id,
-                    )
-                elif decision.agent == "analytics":
-                    answer = await self._analytics_agent.generate(
-                        request.payload.message,
-                        cast(AnalyticsIntent, decision.intent),
-                        request.payload.deal_id,
-                    )
-                elif decision.agent == "offer" and decision.intent in (
-                    "create_offer",
-                    "calculate_offer",
-                ):
-                    if self._offer_agent is None:
-                        raise RuntimeError("Offer agent is not configured")
-                    answer = await self._offer_agent.generate(
-                        request.payload.message,
-                        cast(OfferIntent, decision.intent),
-                        request.payload.deal_id,
                         request.payload.user_id,
+                        request.payload.session_id,
+                    )
+                if pending_offer is not None:
+                    answer, pending_intent = pending_offer
+                    decision = RouteDecision(
+                        agent="offer",
+                        intent=pending_intent,
+                        confidence=1.0,
                     )
                 else:
-                    answer = await self._llm.generate(request.payload.message)
+                    decision = await self._router.route(request.payload.message)
+                    if decision.agent == "negotiation":
+                        answer = await self._negotiation_agent.generate(
+                            request.payload.message,
+                            cast(NegotiationIntent, decision.intent),
+                            request.payload.deal_id,
+                        )
+                    elif decision.agent == "analytics":
+                        answer = await self._analytics_agent.generate(
+                            request.payload.message,
+                            cast(AnalyticsIntent, decision.intent),
+                            request.payload.deal_id,
+                        )
+                    elif decision.agent == "offer" and decision.intent in (
+                        "create_offer",
+                        "calculate_offer",
+                    ):
+                        if self._offer_agent is None:
+                            raise RuntimeError("Offer agent is not configured")
+                        answer = await self._offer_agent.generate(
+                            request.payload.message,
+                            cast(OfferIntent, decision.intent),
+                            request.payload.deal_id,
+                            request.payload.user_id,
+                            request.payload.session_id,
+                        )
+                    else:
+                        answer = await self._llm.generate(request.payload.message)
                 response = AgentResponse.ok(
                     request.request_id,
                     answer,
@@ -255,7 +270,7 @@ class AgentConsumer:
     async def _retry_temporary_error(
         self,
         message: IncomingMessage,
-        request_id: UUID,
+        request_id: str,
         error: Exception,
     ) -> bool:
         retry_count = self._get_retry_count(message)
@@ -303,7 +318,7 @@ class AgentConsumer:
     @staticmethod
     def _failure_response(
         routing_key: str,
-        request_id: UUID,
+        request_id: str,
         code: str,
         message: str,
     ) -> AgentResponse | DialogAnalyzeResponse | DialogReplyAssistResponse:
@@ -314,9 +329,15 @@ class AgentConsumer:
         return AgentResponse.fail(request_id, code, message)
 
     @staticmethod
-    def _extract_request_id(body: bytes) -> UUID | None:
+    def _extract_request_id(body: bytes) -> str | None:
         try:
             raw = json.loads(body)
-            return UUID(str(raw.get("request_id"))) if isinstance(raw, dict) else None
-        except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError, AttributeError):
+            if not isinstance(raw, dict):
+                return None
+            request_id = raw.get("request_id")
+            if not isinstance(request_id, str):
+                return None
+            request_id = request_id.strip()
+            return request_id or None
+        except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
             return None

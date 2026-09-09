@@ -1,5 +1,4 @@
 import logging
-from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -36,7 +35,7 @@ class DialogService:
         self._deal_tools = deal_tools
         self._messages_tools = messages_tools
 
-    async def analyze(self, deal_id: UUID) -> DialogAnalyzeResult:
+    async def analyze(self, deal_id: int) -> DialogAnalyzeResult:
         try:
             return await self._analytics_agent.analyze_dialog(deal_id)
         except ValidationError as exc:
@@ -47,7 +46,7 @@ class DialogService:
 
     async def reply_assist(
         self,
-        deal_id: UUID,
+        deal_id: int,
         selected_text: str | None,
     ) -> DialogReplyAssistResult:
         try:

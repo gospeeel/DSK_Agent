@@ -7,7 +7,6 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -19,8 +18,8 @@ ACTION = "dialog.analyze"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("deal_id", type=UUID, help="Deal UUID")
-    parser.add_argument("user_id", type=UUID, help="Manager/user UUID")
+    parser.add_argument("deal_id", type=int, help="Integer deal ID")
+    parser.add_argument("user_id", type=int, help="Integer manager/user ID")
     parser.add_argument(
         "--timeout",
         type=positive_timeout,
@@ -35,8 +34,8 @@ async def run(args: argparse.Namespace) -> int:
         routing_key=ROUTING_KEY,
         action=ACTION,
         payload={
-            "deal_id": str(args.deal_id),
-            "user_id": str(args.user_id),
+            "deal_id": args.deal_id,
+            "user_id": args.user_id,
         },
         timeout=args.timeout,
     )

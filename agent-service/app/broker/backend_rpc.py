@@ -96,8 +96,8 @@ class BackendRpcClient:
         if timeout <= 0:
             raise ValueError("timeout must be greater than zero")
 
-        request_id = uuid4()
-        correlation_id = str(uuid4())
+        request_id = f"req_{uuid4().hex}"
+        correlation_id = f"corr_{uuid4().hex}"
         request = BackendRequest(
             request_id=request_id,
             action=action,
@@ -140,6 +140,15 @@ class BackendRpcClient:
                 )
             if not response.success:
                 assert response.error is not None
+                logger.warning(
+                    "Backend RPC failed: routing_key=%s action=%s code=%s "
+                    "message=%s request_id=%s",
+                    routing_key,
+                    action,
+                    response.error.code,
+                    response.error.message,
+                    request_id,
+                )
                 raise BackendRpcError(
                     response.error.message,
                     code=response.error.code,

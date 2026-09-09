@@ -16,10 +16,24 @@ import (
 )
 
 var (
-	ErrRPCResponseTimeout = errors.New("agent service response timed out")
-	ErrRPCFailed          = errors.New("agent service returned error")
+	ErrRPCResponseTimeout  = errors.New("agent service response timed out")
+	ErrRPCFailed           = errors.New("agent service returned error")
 	ErrRabbitMQUnavailable = errors.New("rabbitmq broker is currently unavailable")
 )
+
+type AgentRPCError struct {
+	Code    string
+	Message string
+}
+
+func (e *AgentRPCError) Error() string {
+	if e.Message == "" {
+		return e.Code
+	}
+	return e.Code + ": " + e.Message
+}
+
+func (e *AgentRPCError) Unwrap() error { return ErrRPCFailed }
 
 var idCounter uint64
 
@@ -32,6 +46,7 @@ func generateSimpleID(prefix string) string {
 
 type AIAgentService interface {
 	SendChatRequest(ctx context.Context, payload domain.AgentChatPayload) (*domain.AgentChatResponseData, error)
+	NewRabbitMQChannel() (*amqp.Channel, error)
 	Close() error
 }
 
@@ -141,10 +156,10 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 	// Publish to exchange app.topic with routing key agent.chat.request
 	err = ch.PublishWithContext(
 		ctx,
-		"app.topic",           // exchange
-		"agent.chat.request",  // routing key
-		false,                 // mandatory
-		false,                 // immediate
+		"app.topic",          // exchange
+		"agent.chat.request", // routing key
+		false,                // mandatory
+		false,                // immediate
 		amqp.Publishing{
 			ContentType:   "application/json",
 			CorrelationId: correlationID,
@@ -157,7 +172,7 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 	}
 
 	// Wait for response or timeout
-	timeout := 25 * time.Second
+	timeout := 75 * time.Second
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
@@ -188,7 +203,13 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 			}
 
 			if !respEnvelope.Success {
-				return nil, fmt.Errorf("%w: %v", ErrRPCFailed, respEnvelope.Error)
+				if respEnvelope.Error == nil {
+					return nil, ErrRPCFailed
+				}
+				return nil, &AgentRPCError{
+					Code:    respEnvelope.Error.Code,
+					Message: respEnvelope.Error.Message,
+				}
 			}
 
 			if respEnvelope.Data == nil {
@@ -198,6 +219,19 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 			return respEnvelope.Data, nil
 		}
 	}
+}
+
+func (s *aiAgentService) NewRabbitMQChannel() (*amqp.Channel, error) {
+	if _, err := s.ensureConnection(); err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.conn == nil || s.conn.IsClosed() {
+		return nil, ErrRabbitMQUnavailable
+	}
+	return s.conn.Channel()
 }
 
 func (s *aiAgentService) Close() error {

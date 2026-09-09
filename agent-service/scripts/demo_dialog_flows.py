@@ -8,7 +8,6 @@ import asyncio
 import sys
 import time
 from pathlib import Path
-from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -25,8 +24,8 @@ SELECTED_TEXT = "У конкурента дешевле, я не уверен, �
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("deal_id", type=UUID, help="Deal UUID")
-    parser.add_argument("user_id", type=UUID, help="Manager/user UUID")
+    parser.add_argument("deal_id", type=int, help="Integer deal ID")
+    parser.add_argument("user_id", type=int, help="Integer manager/user ID")
     parser.add_argument(
         "--timeout",
         type=positive_timeout,
@@ -38,8 +37,8 @@ def parse_args() -> argparse.Namespace:
 
 async def run(args: argparse.Namespace) -> int:
     common_payload = {
-        "deal_id": str(args.deal_id),
-        "user_id": str(args.user_id),
+        "deal_id": args.deal_id,
+        "user_id": args.user_id,
     }
     steps = (
         (

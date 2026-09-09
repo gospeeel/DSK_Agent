@@ -1,7 +1,6 @@
 import json
 import logging
 from typing import Literal, Protocol
-from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -32,6 +31,30 @@ BACKEND_DATA_ERROR_RESPONSE = (
     "Не удалось получить данные по сделке или объекту. "
     "Для точного контраргумента нужны фактические данные."
 )
+GROUNDING_FALLBACK_RESPONSE = (
+    "Недостаточно подтверждённых данных для безопасного контраргумента. "
+    "Уточните фактические характеристики нашего объекта и конкурента."
+)
+
+_FACTUAL_TOPIC_ROOTS = (
+    "планиров",
+    "инфраструктур",
+    "транспорт",
+    "ипотек",
+    "скидк",
+    "рассрочк",
+    "срок",
+    "сдач",
+    "цен",
+    "площад",
+    "отделк",
+    "парков",
+    "метро",
+    "школ",
+    "магазин",
+    "эколог",
+    "благоустрой",
+)
 
 NEGOTIATION_SYSTEM_PROMPT = """Ты помощник менеджера по продажам недвижимости.
 Сформируй короткий практический ответ для менеджера по продажам.
@@ -44,6 +67,13 @@ NEGOTIATION_SYSTEM_PROMPT = """Ты помощник менеджера по п�
 - ЗАПРЕЩЕНО придумывать инфраструктуру, преимущества нашего объекта или недостатки
   конкурента.
 - ЗАПРЕЩЕНО ссылаться на сведения, которых нет в фактическом контексте.
+- Используй только факты из factual context. Если преимущество не подтверждено
+  данными, не упоминай его.
+- Не расширяй и не подменяй смысл факта: «варианты отделки» нельзя превращать
+  в «разнообразие планировок» или объединять с планировками.
+- Инфраструктуру, транспорт, ипотеку, скидки, сроки, площадь, отделку, парковку
+  и любые другие преимущества можно упоминать только при их явном наличии в
+  factual context. Сохраняй принадлежность факта нашему объекту или конкуренту.
 - Если данных недостаточно, явно скажи об этом менеджеру.
 
 Intent описывает задачу:
@@ -114,7 +144,7 @@ class NegotiationAgent:
         self,
         message: str,
         intent: NegotiationIntent,
-        deal_id: UUID | None,
+        deal_id: int | None,
     ) -> str:
         if intent not in ("handle_objection", "compare_competitor"):
             raise ValueError(f"Unsupported negotiation intent: {intent}")
@@ -208,14 +238,86 @@ class NegotiationAgent:
         intent: NegotiationIntent,
         context: NegotiationContext,
     ) -> str:
+        allowed_facts = self._format_allowed_facts(context)
         user_prompt = (
             f"Intent: {intent}\n\n"
             "Фактический контекст backend:\n"
             f"{context.model_dump_json(indent=2)}\n\n"
+            "Разрешённые факты (не расширять и не подменять формулировки):\n"
+            f"{allowed_facts}\n\n"
             "Текст менеджера:\n"
             f"{message}"
         )
-        return await self._llm.generate(
+        response = await self._llm.generate(
             user_prompt,
             system_prompt=NEGOTIATION_SYSTEM_PROMPT,
         )
+        unsupported = self._unsupported_topics(response, user_prompt)
+        if not unsupported:
+            return response
+
+        logger.warning(
+            "Negotiation response contains unsupported factual topics; retrying: "
+            "topics=%s",
+            ",".join(unsupported),
+        )
+        retry_prompt = (
+            f"{user_prompt}\n\n"
+            "Предыдущий ответ содержал неподтверждённые темы. Сформируй ответ заново "
+            "и используй только перечисленные разрешённые факты."
+        )
+        response = await self._llm.generate(
+            retry_prompt,
+            system_prompt=NEGOTIATION_SYSTEM_PROMPT,
+        )
+        if self._unsupported_topics(response, user_prompt):
+            logger.error("Negotiation grounding validation failed after retry")
+            return GROUNDING_FALLBACK_RESPONSE
+        return response
+
+    @staticmethod
+    def _format_allowed_facts(context: NegotiationContext) -> str:
+        facts = [
+            f"Квартира: id={context.apartment.id}.",
+            f"Здание: id={context.building.id}.",
+            f"Район здания: {context.building.district}.",
+        ]
+        apartment_fields = (
+            ("Номер квартиры", context.apartment.number),
+            ("Этаж квартиры", context.apartment.floor),
+            ("Количество комнат", context.apartment.rooms),
+            ("Площадь квартиры", context.apartment.area),
+            ("Цена квартиры", context.apartment.price),
+            ("Статус квартиры", context.apartment.status),
+        )
+        building_fields = (
+            ("Название здания", context.building.name),
+            ("Готовность здания", context.building.readiness_percent),
+            ("Плановая дата сдачи", context.building.planned_delivery),
+            ("Прогнозная дата сдачи", context.building.forecast_delivery),
+        )
+        for label, value in (*apartment_fields, *building_fields):
+            if value is not None:
+                facts.append(f"{label}: {value}.")
+        for competitor in context.competitors:
+            prefix = f"Конкурент {competitor.project_name}"
+            facts.append(f"{prefix}, район: {competitor.district}.")
+            if competitor.price_per_sqm is not None:
+                facts.append(
+                    f"{prefix}, цена за м²: {competitor.price_per_sqm}."
+                )
+            if competitor.advantages is not None:
+                facts.append(f"{prefix}, преимущества: {competitor.advantages}.")
+            if competitor.disadvantages is not None:
+                facts.append(f"{prefix}, недостатки: {competitor.disadvantages}.")
+        return "\n".join(f"- {fact}" for fact in facts)
+
+    @staticmethod
+    def _unsupported_topics(response: str, factual_source: str) -> list[str]:
+        response_text = response.casefold()
+        source_text = factual_source.casefold()
+        return [
+            root
+            for root in _FACTUAL_TOPIC_ROOTS
+            if root in response_text and root not in source_text
+        ]
