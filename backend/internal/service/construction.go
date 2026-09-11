@@ -38,11 +38,15 @@ type ConstructionService interface {
 }
 
 type constructionService struct {
-	repo repository.ConstructionRepository
+	repo         repository.ConstructionRepository
+	notification NotificationService
 }
 
-func NewConstructionService(repo repository.ConstructionRepository) ConstructionService {
-	return &constructionService{repo: repo}
+func NewConstructionService(repo repository.ConstructionRepository, notification NotificationService) ConstructionService {
+	return &constructionService{
+		repo:         repo,
+		notification: notification,
+	}
 }
 
 // === Residential Complexes ===
@@ -114,7 +118,13 @@ func (s *constructionService) DeleteApartment(ctx context.Context, id int) error
 // === Construction Progress ===
 
 func (s *constructionService) CreateProgress(ctx context.Context, progress *domain.ConstructionProgress) error {
-	return s.repo.CreateProgress(ctx, progress)
+	if err := s.repo.CreateProgress(ctx, progress); err != nil {
+		return err
+	}
+	if s.notification != nil {
+		_ = s.notification.NotifyConstructionUpdate(ctx, progress)
+	}
+	return nil
 }
 
 func (s *constructionService) GetProgressByID(ctx context.Context, id int) (*domain.ConstructionProgress, error) {
@@ -126,9 +136,16 @@ func (s *constructionService) GetProgressByBuildingID(ctx context.Context, build
 }
 
 func (s *constructionService) UpdateProgress(ctx context.Context, progress *domain.ConstructionProgress) error {
-	return s.repo.UpdateProgress(ctx, progress)
+	if err := s.repo.UpdateProgress(ctx, progress); err != nil {
+		return err
+	}
+	if s.notification != nil {
+		_ = s.notification.NotifyConstructionUpdate(ctx, progress)
+	}
+	return nil
 }
 
 func (s *constructionService) DeleteProgress(ctx context.Context, id int) error {
 	return s.repo.DeleteProgress(ctx, id)
 }
+

@@ -1,3 +1,24 @@
+-- Create ENUMs
+CREATE TYPE deal_status AS ENUM ('pending', 'contract', 'completed', 'cancelled');
+
+-- Table "deals"
+CREATE TABLE IF NOT EXISTS deals (
+    id SERIAL PRIMARY KEY,
+    id_user INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id_employee INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id_apartment INT NOT NULL REFERENCES apartments(id) ON DELETE CASCADE,
+    id_chat_session INT REFERENCES chat_sessions(id) ON DELETE SET NULL,
+    base_price DECIMAL(15, 2) NOT NULL,
+    percent_discount DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+    total_price DECIMAL(15, 2) NOT NULL,
+    status deal_status NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS deals_id_chat_session_idx ON deals (id_chat_session) WHERE id_chat_session IS NOT NULL;
+
+-- Table: "offers"
 CREATE TABLE IF NOT EXISTS offers (
     id SERIAL PRIMARY KEY,
     deal_id INT NOT NULL REFERENCES deals(id) ON DELETE CASCADE,

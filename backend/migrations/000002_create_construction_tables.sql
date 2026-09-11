@@ -1,16 +1,14 @@
--- Create ENUMs for buildings
+-- Create ENUMs
 CREATE TYPE building_status AS ENUM ('design', 'construction', 'completed', 'suspended');
 CREATE TYPE wall_material AS ENUM ('panel', 'monolith', 'brick', 'block');
 
--- Create ENUMs for apartments
 CREATE TYPE finishing_type AS ENUM ('rough', 'white_box', 'turnkey');
 CREATE TYPE apartment_status AS ENUM ('free', 'booked', 'sold');
 
--- Create ENUMs for construction progress
 CREATE TYPE progress_stage AS ENUM ('excavation', 'foundation', 'frame', 'roofing', 'finishing');
 CREATE TYPE progress_status AS ENUM ('not_started', 'in_progress', 'completed', 'delayed');
 
--- Table: residential_complexes
+-- Table: "residential_complexes"
 CREATE TABLE IF NOT EXISTS residential_complexes (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -18,11 +16,12 @@ CREATE TABLE IF NOT EXISTS residential_complexes (
     description TEXT
 );
 
--- Table: buildings
+-- Table: "buildings"
 CREATE TABLE IF NOT EXISTS buildings (
     id SERIAL PRIMARY KEY,
     residential_complex_id INT NOT NULL REFERENCES residential_complexes(id) ON DELETE CASCADE,
     address VARCHAR(255) NOT NULL,
+    district VARCHAR(255),
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
     floors_count INT NOT NULL,
@@ -32,7 +31,7 @@ CREATE TABLE IF NOT EXISTS buildings (
     type_wall_material wall_material NOT NULL
 );
 
--- Table: apartments
+-- Table: "apartments"
 CREATE TABLE IF NOT EXISTS apartments (
     id SERIAL PRIMARY KEY,
     building_id INT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
@@ -45,7 +44,7 @@ CREATE TABLE IF NOT EXISTS apartments (
     status apartment_status NOT NULL
 );
 
--- Table: construction_progress
+-- Table: "construction_progress"
 CREATE TABLE IF NOT EXISTS construction_progress (
     id SERIAL PRIMARY KEY,
     building_id INT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
@@ -56,5 +55,7 @@ CREATE TABLE IF NOT EXISTS construction_progress (
     actual_end_date DATE,
     status progress_status NOT NULL,
     completion_percentage INT DEFAULT 0,
-    delay_reason VARCHAR(255)
+    delay_reason VARCHAR(255),
+    risk_level VARCHAR(20) CHECK (risk_level IS NULL OR risk_level IN ('low', 'medium', 'high')),
+    delay_days INT CHECK (delay_days IS NULL OR delay_days >= 0)
 );

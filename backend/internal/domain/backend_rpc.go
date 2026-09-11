@@ -29,18 +29,6 @@ func BackendRPCSuccess(requestID string, data any) BackendRPCResponse {
 	}
 }
 
-func BackendRPCFailure(requestID, code, message string) BackendRPCResponse {
-	return BackendRPCResponse{
-		RequestID: requestID,
-		Success:   false,
-		Data:      nil,
-		Error: &BackendRPCError{
-			Code:    code,
-			Message: message,
-		},
-	}
-}
-
 type DealDialogMessage struct {
 	ID        int    `json:"id"`
 	Direction string `json:"direction"`
@@ -52,4 +40,17 @@ type Recommendation struct {
 	DealID         int    `json:"deal_id"`
 	Kind           string `json:"kind"`
 	Recommendation string `json:"recommendation"`
+}
+
+
+func BackendRPCFailure(requestID, code, message string) BackendRPCResponse {
+	return BackendRPCResponse{
+		RequestID: requestID,
+		Success:   false,
+		Data:      nil,
+		Error: &BackendRPCError{
+			Code:    code,
+			Message: message,
+		},
+	}
 }

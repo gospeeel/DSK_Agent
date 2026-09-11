@@ -121,10 +121,25 @@
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
         }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "user_id": { "type": "integer", "example": 10 },
+          "deal_id": { "type": "integer", "nullable": true, "example": 5 },
+          "type": { "type": "string", "enum": ["construction_delay", "construction_risk", "deal_update", "general"], "example": "construction_delay" },
+          "title": { "type": "string", "example": "Изменение сроков строительства: этап finishing" },
+          "message": { "type": "string", "example": "Уважаемый клиент! По вашему объекту зафиксирована задержка..." },
+          "is_read": { "type": "boolean", "example": false },
+          "created_at": { "type": "string", "format": "date-time" },
+          "read_at": { "type": "string", "format": "date-time", "nullable": true }
+        }
       }
     }
   },
   "paths": {
+
     "/api/auth/register": {
       "post": {
         "tags": ["Auth"],
@@ -335,7 +350,43 @@
         }
       }
     },
+    "/api/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Получить уведомления пользователя",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "unread", "in": "query", "required": false, "schema": { "type": "boolean" }, "description": "Только непрочитанные" }
+        ],
+        "responses": {
+          "200": { "description": "Список уведомлений", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Notification" } } } } }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "put": {
+        "tags": ["Notifications"],
+        "summary": "Отметить все уведомления как прочитанные",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Все уведомления прочитаны" }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "put": {
+        "tags": ["Notifications"],
+        "summary": "Отметить уведомление как прочитанное",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Уведомление прочитано" },
+          "404": { "description": "Уведомление не найдено" }
+        }
+      }
+    },
     "/api/ai/chat": {
+
       "post": {
         "tags": ["AI"],
         "summary": "Чат с AI Agent (GigaChat) через RabbitMQ RPC",

@@ -40,3 +40,13 @@ func TestLoadConfigRejectsWildcardCORSOrigin(t *testing.T) {
 	}()
 	LoadConfig()
 }
+
+func TestLoadConfigParsesSMTPURL(t *testing.T) {
+	t.Setenv("SMTP_URL", "smtp://notifications@dsk-agent.ru:mysecretpassword@smtp.yandex.ru:587")
+
+	cfg := LoadConfig()
+	if cfg.SMTPHost != "smtp.yandex.ru" || cfg.SMTPPort != "587" || cfg.SMTPUsername != "notifications@dsk-agent.ru" || cfg.SMTPPassword != "mysecretpassword" || cfg.SMTPFrom != "notifications@dsk-agent.ru" {
+		t.Fatalf("unexpected SMTP config parsed: %+v", cfg)
+	}
+}
+

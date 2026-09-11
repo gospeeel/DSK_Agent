@@ -38,17 +38,23 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService, authService)
 
+	dealRepo := repository.NewDealRepository(dbpool)
+	dealService := service.NewDealService(dealRepo)
+	dealHandler := handler.NewDealHandler(dealService)
+
+
+	emailSender := service.NewSMTPEmailSender(cfg)
+	notificationRepo := repository.NewNotificationRepository(dbpool)
+	notificationService := service.NewNotificationService(notificationRepo, dealRepo, userRepo, emailSender)
+	notificationHandler := handler.NewNotificationHandler(notificationService)
+
 	constructionRepo := repository.NewConstructionRepository(dbpool)
-	constructionService := service.NewConstructionService(constructionRepo)
+	constructionService := service.NewConstructionService(constructionRepo, notificationService)
 	constructionHandler := handler.NewConstructionHandler(constructionService)
 
 	chatRepo := repository.NewChatRepository(dbpool)
 	chatService := service.NewChatService(chatRepo)
 	chatHandler := handler.NewChatHandler(chatService)
-
-	dealRepo := repository.NewDealRepository(dbpool)
-	dealService := service.NewDealService(dealRepo)
-	dealHandler := handler.NewDealHandler(dealService)
 
 	aiService := service.NewAIAgentService(cfg.RabbitMQURL)
 	defer aiService.Close()
@@ -95,6 +101,11 @@ func main() {
 		r.Get("/api/users/me", userHandler.GetMe)
 		r.Put("/api/users/me", userHandler.UpdateMe)
 
+		// Notifications routes
+		r.Get("/api/notifications", notificationHandler.GetMyNotifications)
+		r.Put("/api/notifications/read-all", notificationHandler.MarkAllAsRead)
+		r.Put("/api/notifications/{id}/read", notificationHandler.MarkAsRead)
+
 		// Client Chat routes
 		r.Get("/api/chat/sessions", chatHandler.GetMySessions)
 		r.Get("/api/chat/sessions/{id}", chatHandler.GetSession)
@@ -111,3 +122,4 @@ func main() {
 		log.Fatalf("Server error: %v", err)
 	}
 }
+
