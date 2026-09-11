@@ -11,8 +11,9 @@ func TestRuntimeSpecsAreValidAndCoverRegisteredAPIRoutes(t *testing.T) {
 		raw         []byte
 		methodCount int
 	}{
-		{name: "user", raw: UserSpec, methodCount: 22},
+		{name: "user", raw: UserSpec, methodCount: 25},
 		{name: "staff", raw: StaffSpec, methodCount: 38},
+
 	}
 
 	for _, tt := range tests {

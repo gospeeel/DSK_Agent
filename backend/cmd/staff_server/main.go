@@ -39,17 +39,22 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService, authService)
 
+	dealRepo := repository.NewDealRepository(dbpool)
+	dealService := service.NewDealService(dealRepo)
+	dealHandler := handler.NewDealHandler(dealService)
+
+	emailSender := service.NewSMTPEmailSender(cfg)
+	notificationRepo := repository.NewNotificationRepository(dbpool)
+	notificationService := service.NewNotificationService(notificationRepo, dealRepo, userRepo, emailSender)
+
 	constructionRepo := repository.NewConstructionRepository(dbpool)
-	constructionService := service.NewConstructionService(constructionRepo)
+	constructionService := service.NewConstructionService(constructionRepo, notificationService)
 	constructionHandler := handler.NewConstructionHandler(constructionService)
 
 	chatRepo := repository.NewChatRepository(dbpool)
 	chatService := service.NewChatService(chatRepo)
 	chatHandler := handler.NewChatHandler(chatService)
 
-	dealRepo := repository.NewDealRepository(dbpool)
-	dealService := service.NewDealService(dealRepo)
-	dealHandler := handler.NewDealHandler(dealService)
 	dialogAnalysisService := service.NewDialogAnalysisService(dealRepo, chatRepo)
 	competitorRepo := repository.NewCompetitorRepository(dbpool)
 	recommendationRepo := repository.NewRecommendationRepository(dbpool)

@@ -3,7 +3,6 @@ package domain
 import "encoding/json"
 
 type Role string
-
 const (
 	RoleUser       Role = "user"
 	RoleManager    Role = "manager"
@@ -26,6 +25,13 @@ type ClientPreferences struct {
 	Preferences map[string]any `json:"preferences"`
 }
 
+type UpdateUserRequest struct {
+	Name     string `json:"name,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+
 func DecodePreferences(raw []byte) (map[string]any, error) {
 	preferences := make(map[string]any)
 	if len(raw) == 0 {
@@ -35,10 +41,4 @@ func DecodePreferences(raw []byte) (map[string]any, error) {
 		return nil, err
 	}
 	return preferences, nil
-}
-
-type UpdateUserRequest struct {
-	Name     string `json:"name,omitempty"`
-	Email    string `json:"email,omitempty"`
-	Password string `json:"password,omitempty"`
 }

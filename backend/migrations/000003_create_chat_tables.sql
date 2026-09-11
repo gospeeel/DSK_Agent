@@ -1,17 +1,7 @@
--- Create ENUMs for chat and deals
-DO $$ BEGIN
-    CREATE TYPE chat_session_status AS ENUM ('open', 'in_progress', 'close');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
+-- Create ENUMs
+CREATE TYPE chat_session_status AS ENUM ('open', 'in_progress', 'close');
 
-DO $$ BEGIN
-    CREATE TYPE deal_status AS ENUM ('pending', 'contract', 'completed', 'cancelled');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
--- Table: chat_sessions
+-- Table: "chat_sessions"
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id SERIAL PRIMARY KEY,
     id_user INT REFERENCES users(id) ON DELETE SET NULL,
@@ -25,7 +15,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table: chat_session_rejections
+-- Table: "chat_session_rejections"
 CREATE TABLE IF NOT EXISTS chat_session_rejections (
     id SERIAL PRIMARY KEY,
     id_chat_sessions INT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
@@ -34,7 +24,7 @@ CREATE TABLE IF NOT EXISTS chat_session_rejections (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table: messages
+-- Table: "messages"
 CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
     id_chat_session INT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
@@ -45,16 +35,5 @@ CREATE TABLE IF NOT EXISTS messages (
     sended_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table: deals
-CREATE TABLE IF NOT EXISTS deals (
-    id SERIAL PRIMARY KEY,
-    id_user INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    id_employee INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    id_apartment INT NOT NULL REFERENCES apartments(id) ON DELETE CASCADE,
-    base_price DECIMAL(15, 2) NOT NULL,
-    percent_discount DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
-    total_price DECIMAL(15, 2) NOT NULL,
-    status deal_status NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+
+

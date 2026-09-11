@@ -68,7 +68,15 @@ PORT=8080
 RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
 MAX_MANAGER_DISCOUNT_PERCENT=5
 MAX_SUPERVISOR_DISCOUNT_PERCENT=15
+
+# Настройки отправки почты через SMTP (уведомления об изменении сроков/рисках)
+SMTP_HOST=smtp.yandex.ru
+SMTP_PORT=587
+SMTP_USERNAME=notifications@dsk-agent.ru
+SMTP_PASSWORD=your_app_password
+SMTP_FROM=notifications@dsk-agent.ru
 ```
+
 
 ### 2. Запуск через Docker Compose
 

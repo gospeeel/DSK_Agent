@@ -34,10 +34,12 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "message cannot be empty", http.StatusBadRequest)
 		return
 	}
+
 	if req.SessionID == nil || *req.SessionID <= 0 {
 		http.Error(w, "session_id must be a positive integer", http.StatusBadRequest)
 		return
 	}
+
 	if req.DealID != nil && *req.DealID <= 0 {
 		http.Error(w, "deal_id must be a positive integer or null", http.StatusBadRequest)
 		return
@@ -57,7 +59,6 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build RabbitMQ RPC payload
 	payload := domain.AgentChatPayload{
 		UserID:    userID,
 		SessionID: *req.SessionID,
@@ -65,7 +66,6 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		Message:   req.Message,
 	}
 
-	// Record the manager message in the selected chat session.
 	userIDForMessage := userID
 	_, _ = h.chatService.SendMessage(
 		r.Context(),
@@ -75,7 +75,6 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		req.Message,
 	)
 
-	// Send RPC to Agent Service via RabbitMQ
 	respData, err := h.aiService.SendChatRequest(r.Context(), payload)
 	if err != nil {
 		var agentError *service.AgentRPCError
@@ -83,19 +82,21 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "FORBIDDEN", http.StatusForbidden)
 			return
 		}
+
 		if errors.Is(err, service.ErrRabbitMQUnavailable) {
 			http.Error(w, "AI service unavailable: "+err.Error(), http.StatusServiceUnavailable)
 			return
 		}
+
 		if errors.Is(err, service.ErrRPCResponseTimeout) {
 			http.Error(w, "AI response timeout", http.StatusGatewayTimeout)
 			return
 		}
+
 		http.Error(w, "AI service error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Record the AI response in the same chat session.
 	if respData != nil && respData.Message != "" {
 		_, _ = h.chatService.SendMessage(r.Context(), *req.SessionID, nil, "ai", respData.Message)
 	}

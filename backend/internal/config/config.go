@@ -19,13 +19,19 @@ type Config struct {
 	MaxManagerDiscountPercent    float64
 	MaxSupervisorDiscountPercent float64
 	CORSAllowedOrigins           []string
+
+	// SMTP Email Configuration
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
 }
 
 func (c *Config) GetDatabaseURL() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", c.DBUser, c.DBPass, c.DBHost, c.DBPort, c.DBName)
 }
 
-// LoadConfig reads configuration values from environment variables.
 func LoadConfig() *Config {
 	rabbitURL := os.Getenv("RABBITMQ_URL")
 	if rabbitURL == "" {
@@ -34,6 +40,8 @@ func LoadConfig() *Config {
 
 	managerDiscount := percentEnv("MAX_MANAGER_DISCOUNT_PERCENT", 5)
 	supervisorDiscount := percentEnv("MAX_SUPERVISOR_DISCOUNT_PERCENT", 15)
+
+	smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom := parseSMTPConfig()
 
 	return &Config{
 		DBHost:                       os.Getenv("DB_HOST"),
@@ -55,8 +63,65 @@ func LoadConfig() *Config {
 				"http://127.0.0.1:4173",
 			},
 		),
+		SMTPHost:     smtpHost,
+		SMTPPort:     smtpPort,
+		SMTPUsername: smtpUser,
+		SMTPPassword: smtpPass,
+		SMTPFrom:     smtpFrom,
 	}
 }
+
+func parseSMTPConfig() (host, port, user, pass, from string) {
+	if raw := os.Getenv("SMTP_URL"); raw != "" {
+		// Example: smtp://user:pass@smtp.yandex.ru:587
+		cleaned := strings.TrimPrefix(raw, "smtp://")
+		var authPart, hostPart string
+		if idx := strings.LastIndex(cleaned, "@"); idx != -1 {
+			authPart = cleaned[:idx]
+			hostPart = cleaned[idx+1:]
+		} else {
+			hostPart = cleaned
+		}
+
+		if authPart != "" {
+			parts := strings.SplitN(authPart, ":", 2)
+			user = parts[0]
+			if len(parts) > 1 {
+				pass = parts[1]
+			}
+		}
+
+		if hostPart != "" {
+			parts := strings.SplitN(hostPart, ":", 2)
+			host = parts[0]
+			if len(parts) > 1 {
+				port = parts[1]
+			} else {
+				port = "587"
+			}
+		}
+		from = os.Getenv("SMTP_FROM")
+		if from == "" {
+			from = user
+		}
+		return host, port, user, pass, from
+	}
+
+	host = os.Getenv("SMTP_HOST")
+	port = os.Getenv("SMTP_PORT")
+	if port == "" && host != "" {
+		port = "587"
+	}
+	user = os.Getenv("SMTP_USERNAME")
+	pass = os.Getenv("SMTP_PASSWORD")
+	from = os.Getenv("SMTP_FROM")
+	if from == "" {
+		from = user
+	}
+	return host, port, user, pass, from
+}
+
+
 
 func stringListEnv(name string, fallback []string) []string {
 	value := strings.TrimSpace(os.Getenv(name))

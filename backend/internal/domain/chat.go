@@ -26,10 +26,8 @@ type ChatSession struct {
 	Status      ChatSessionStatus `json:"status"`
 	CreatedAt   time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
-
-	// Joined/enrichment fields
-	UserName     *string `json:"user_name,omitempty"`
-	EmployeeName *string `json:"employee_name,omitempty"`
+	UserName     *string          `json:"user_name,omitempty"`
+	EmployeeName *string          `json:"employee_name,omitempty"`
 }
 
 type ChatSessionRejection struct {
@@ -45,7 +43,7 @@ type Message struct {
 	ID            int       `json:"id"`
 	ChatSessionID int       `json:"id_chat_session"`
 	UserID        *int      `json:"id_user"`
-	SenderType    string    `json:"sender_type"` // "client", "manager", "ai", "system"
+	SenderType    string    `json:"sender_type"`
 	Content       string    `json:"content"`
 	IsRead        bool      `json:"is_read"`
 	SendedAt      time.Time `json:"sended_at"`

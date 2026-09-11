@@ -22,6 +22,23 @@ func updateUserSpec(raw []byte) []byte {
 		"200": "AIChatResponse", "400": "", "401": "", "403": "", "500": "", "503": "", "504": "",
 	})
 
+	paths["/api/notifications"] = openAPIObject{
+		"get": securedListOperation("Notifications", "Получить уведомления пользователя", "Notification"),
+	}
+	paths["/api/notifications/read-all"] = openAPIObject{
+		"put": openAPIObject{
+			"tags": []string{"Notifications"}, "summary": "Отметить все уведомления как прочитанные", "security": bearerSecurity(),
+			"responses": responses(map[string]string{"200": ""}),
+		},
+	}
+	paths["/api/notifications/{id}/read"] = openAPIObject{
+		"put": openAPIObject{
+			"tags": []string{"Notifications"}, "summary": "Отметить уведомление как прочитанное", "security": bearerSecurity(),
+			"parameters": []any{idParameter("id")},
+			"responses":  responses(map[string]string{"200": "", "404": ""}),
+		},
+	}
+
 	paths["/api/progress/{id}"] = openAPIObject{
 		"get": securedReadOperation("Catalog", "Получить этап строительства", "ConstructionProgress"),
 	}
@@ -29,6 +46,7 @@ func updateUserSpec(raw []byte) []byte {
 	delete(operation(paths, "/api/progress/{id}", "get"), "security")
 	return encodeSpec(doc)
 }
+
 
 func updateStaffSpec(raw []byte) []byte {
 	doc := decodeSpec(raw)
@@ -160,8 +178,15 @@ func sharedSchemas() openAPIObject {
 			"status": enum("not_started", "in_progress", "completed", "delayed"), "completion_percentage": integer(true),
 			"delay_reason": openAPIObject{"type": "string"}, "risk_level": openAPIObject{"type": "string", "nullable": true}, "delay_days": integer(true),
 		}),
+		"Notification": schema([]string{"id", "user_id", "type", "title", "message", "is_read", "created_at"}, openAPIObject{
+			"id": integer(false), "user_id": integer(false), "deal_id": integer(true),
+			"type": enum("construction_delay", "construction_risk", "deal_update", "general"),
+			"title": openAPIObject{"type": "string"}, "message": openAPIObject{"type": "string"},
+			"is_read": openAPIObject{"type": "boolean"}, "created_at": date(), "read_at": date(),
+		}),
 	}
 }
+
 
 func schema(required []string, properties openAPIObject) openAPIObject {
 	result := openAPIObject{"type": "object", "properties": properties}
