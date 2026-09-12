@@ -42,11 +42,27 @@ class OfferCalculation(BaseModel):
 
     deal_id: BusinessId
     base_price: int = Field(ge=0)
+    apartment_price: int | None = Field(default=None, ge=0)
+    parking_unit_id: BusinessId | None = None
+    parking_number: str | None = None
+    parking_price: int = Field(default=0, ge=0)
+    storage_unit_id: BusinessId | None = None
+    storage_number: str | None = None
+    storage_price: int = Field(default=0, ge=0)
     discount_percent: float = Field(ge=0)
     discount_amount: int = Field(ge=0)
     final_price: int = Field(ge=0)
     max_allowed_discount: float = Field(ge=0)
     requires_approval: bool
+
+    @model_validator(mode="after")
+    def derive_apartment_price(self) -> "OfferCalculation":
+        if self.apartment_price is None:
+            self.apartment_price = max(
+                0,
+                self.base_price - self.parking_price - self.storage_price,
+            )
+        return self
 
 
 class OfferContext(BaseModel):

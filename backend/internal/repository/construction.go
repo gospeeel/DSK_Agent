@@ -111,13 +111,13 @@ func (r *postgresConstructionRepository) DeleteResidentialComplex(ctx context.Co
 // === Buildings ===
 
 func (r *postgresConstructionRepository) CreateBuilding(ctx context.Context, b *domain.Building) error {
-	query := `INSERT INTO buildings (residential_complex_id, address, district, latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`
-	return r.db.QueryRow(ctx, query, b.ResidentialComplexID, b.Address, b.District, b.Latitude, b.Longitude, b.FloorsCount, b.PlannedDate, b.ActualDate, b.Status, b.TypeWallMaterial).Scan(&b.ID)
+	query := `INSERT INTO buildings (residential_complex_id, address, district, latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material, readiness_percent, forecast_date, delivery_shift_days)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`
+	return r.db.QueryRow(ctx, query, b.ResidentialComplexID, b.Address, b.District, b.Latitude, b.Longitude, b.FloorsCount, b.PlannedDate, b.ActualDate, b.Status, b.TypeWallMaterial, b.ReadinessPercent, b.ForecastDate, b.DeliveryShiftDays).Scan(&b.ID)
 }
 
 func (r *postgresConstructionRepository) GetBuildingByID(ctx context.Context, id int) (*domain.Building, error) {
-	query := `SELECT id, residential_complex_id, address, COALESCE(district, ''), latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material FROM buildings WHERE id = $1`
+	query := `SELECT id, residential_complex_id, address, COALESCE(district, ''), latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material, readiness_percent, forecast_date, delivery_shift_days FROM buildings WHERE id = $1`
 	b, err := scanBuilding(r.db.QueryRow(ctx, query, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrBuildingNotFound
@@ -145,6 +145,9 @@ func scanBuilding(row buildingRow) (*domain.Building, error) {
 		&b.ActualDate,
 		&b.Status,
 		&b.TypeWallMaterial,
+		&b.ReadinessPercent,
+		&b.ForecastDate,
+		&b.DeliveryShiftDays,
 	)
 	if latitude != nil {
 		b.Latitude = *latitude
@@ -156,7 +159,7 @@ func scanBuilding(row buildingRow) (*domain.Building, error) {
 }
 
 func (r *postgresConstructionRepository) GetBuildingsByComplexID(ctx context.Context, complexID int) ([]*domain.Building, error) {
-	query := `SELECT id, residential_complex_id, address, COALESCE(district, ''), latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material FROM buildings WHERE residential_complex_id = $1`
+	query := `SELECT id, residential_complex_id, address, COALESCE(district, ''), latitude, longitude, floors_count, planned_date, actual_date, status, type_wall_material, readiness_percent, forecast_date, delivery_shift_days FROM buildings WHERE residential_complex_id = $1`
 	rows, err := r.db.Query(ctx, query, complexID)
 	if err != nil {
 		return nil, err
@@ -166,7 +169,7 @@ func (r *postgresConstructionRepository) GetBuildingsByComplexID(ctx context.Con
 	var buildings []*domain.Building
 	for rows.Next() {
 		var b domain.Building
-		if err := rows.Scan(&b.ID, &b.ResidentialComplexID, &b.Address, &b.District, &b.Latitude, &b.Longitude, &b.FloorsCount, &b.PlannedDate, &b.ActualDate, &b.Status, &b.TypeWallMaterial); err != nil {
+		if err := rows.Scan(&b.ID, &b.ResidentialComplexID, &b.Address, &b.District, &b.Latitude, &b.Longitude, &b.FloorsCount, &b.PlannedDate, &b.ActualDate, &b.Status, &b.TypeWallMaterial, &b.ReadinessPercent, &b.ForecastDate, &b.DeliveryShiftDays); err != nil {
 			return nil, err
 		}
 		buildings = append(buildings, &b)
@@ -175,8 +178,8 @@ func (r *postgresConstructionRepository) GetBuildingsByComplexID(ctx context.Con
 }
 
 func (r *postgresConstructionRepository) UpdateBuilding(ctx context.Context, b *domain.Building) error {
-	query := `UPDATE buildings SET residential_complex_id = $1, address = $2, district = $3, latitude = $4, longitude = $5, floors_count = $6, planned_date = $7, actual_date = $8, status = $9, type_wall_material = $10 WHERE id = $11`
-	cmd, err := r.db.Exec(ctx, query, b.ResidentialComplexID, b.Address, b.District, b.Latitude, b.Longitude, b.FloorsCount, b.PlannedDate, b.ActualDate, b.Status, b.TypeWallMaterial, b.ID)
+	query := `UPDATE buildings SET residential_complex_id = $1, address = $2, district = $3, latitude = $4, longitude = $5, floors_count = $6, planned_date = $7, actual_date = $8, status = $9, type_wall_material = $10, readiness_percent = $11, forecast_date = $12, delivery_shift_days = $13 WHERE id = $14`
+	cmd, err := r.db.Exec(ctx, query, b.ResidentialComplexID, b.Address, b.District, b.Latitude, b.Longitude, b.FloorsCount, b.PlannedDate, b.ActualDate, b.Status, b.TypeWallMaterial, b.ReadinessPercent, b.ForecastDate, b.DeliveryShiftDays, b.ID)
 	if err == nil && cmd.RowsAffected() == 0 {
 		return ErrBuildingNotFound
 	}

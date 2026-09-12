@@ -4,7 +4,7 @@ var UserSpec = []byte(`{
   "openapi": "3.0.3",
   "info": {
     "title": "AI Hackathon - User Server API",
-    "description": "Клиентский API для покупателей недвижимости, взаимодействия с менеджерами и AI Agent (GigaChat)",
+    "description": "Клиентский API для покупателей недвижимости, взаимодействия с менеджерами, просмотра сделок и предложений",
     "version": "1.0.0"
   },
   "servers": [

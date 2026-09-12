@@ -1,48 +1,44 @@
-# frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+## Стек
 
-## Recommended IDE Setup
+- Vue 3, TypeScript, Vite
+- Pinia — клиентское состояние приложения
+- TanStack Vue Query — серверное состояние и мутации
+- Tailwind CSS — стилизация
+- Vitest и Playwright — unit и E2E-проверки
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
+## Запуск
 
 ```sh
 pnpm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
 pnpm dev
 ```
 
-### Type-Check, Compile and Minify for Production
+## Проверки
 
 ```sh
+pnpm type-check
+pnpm test
+pnpm test:e2e
+pnpm lint
 pnpm build
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+## Источник данных
+
+Подключены реальные HTTP API: клиентский сервис 8080 и сервис сотрудников 8081.
+При недоступном backend показывается ошибка, подстановки моков нет.
+При необходимости создайте `.env.local` по образцу `.env.example`:
 
 ```sh
-pnpm lint
+USER_API_TARGET=http://127.0.0.1:8080
+STAFF_API_TARGET=http://127.0.0.1:8081
 ```
+
+Контракты находятся в `src/shared/api/backend-contracts.ts`, транспорт — `transport.ts`.
+Сессия использует HttpOnly cookie. Vite проксирует `/user-api/api/*` и `/staff-api/api/*`.
+Для production нужны аналогичные reverse proxy правила; `vite preview` не является production-сервером.
+
+Это промежуточная интеграция, не завершённая миграция всех сценариев.
+Реализованные функции, блокеры backend и оставшиеся задачи: [FRONTEND_MIGRATION_STATUS.md](../FRONTEND_MIGRATION_STATUS.md).
+Playwright использует HTTP fixtures только в тестах; это не проверка работающих Go-сервисов.

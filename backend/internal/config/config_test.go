@@ -49,4 +49,3 @@ func TestLoadConfigParsesSMTPURL(t *testing.T) {
 		t.Fatalf("unexpected SMTP config parsed: %+v", cfg)
 	}
 }
-

@@ -17,6 +17,40 @@ type DealRepository interface {
 	GetDeals(ctx context.Context, userID *int, employeeID *int, status *domain.DealStatus) ([]*domain.Deal, error)
 	UpdateDealStatus(ctx context.Context, id int, status domain.DealStatus, discount *float64, totalPrice *float64) (*domain.Deal, error)
 	GetDealsByBuildingID(ctx context.Context, buildingID int) ([]*domain.Deal, error)
+	GetApartmentSaleData(ctx context.Context, apartmentID int) (float64, domain.ApartmentStatus, error)
+	CanCreateDealForUser(ctx context.Context, actor *domain.User, userID int, chatSessionID *int) (bool, error)
+}
+
+func (r *dealRepository) CanCreateDealForUser(ctx context.Context, actor *domain.User, userID int, chatSessionID *int) (bool, error) {
+	if actor == nil {
+		return false, nil
+	}
+	var allowed bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM users u
+			WHERE u.id = $2 AND u.role = 'user'
+			AND ($3::int IS NULL OR EXISTS (
+				SELECT 1 FROM chat_sessions cs WHERE cs.id = $3 AND cs.id_user = u.id
+				AND ($4::boolean OR cs.id_employee = $1)
+			))
+			AND ($4::boolean OR EXISTS (
+				SELECT 1 FROM chat_sessions cs WHERE cs.id_user = u.id AND cs.id_employee = $1
+				AND ($3::int IS NULL OR cs.id = $3)
+			))
+		)
+	`, actor.ID, userID, chatSessionID, actor.Role == domain.RoleSupervisor).Scan(&allowed)
+	return allowed, err
+}
+
+func (r *dealRepository) GetApartmentSaleData(ctx context.Context, apartmentID int) (float64, domain.ApartmentStatus, error) {
+	var price float64
+	var status domain.ApartmentStatus
+	err := r.db.QueryRow(ctx, `SELECT price, status FROM apartments WHERE id = $1`, apartmentID).Scan(&price, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, "", ErrApartmentNotFound
+	}
+	return price, status, err
 }
 
 func (r *dealRepository) GetDealsByBuildingID(ctx context.Context, buildingID int) ([]*domain.Deal, error) {
@@ -26,7 +60,7 @@ func (r *dealRepository) GetDealsByBuildingID(ctx context.Context, buildingID in
 		       d.created_at, d.updated_at
 		FROM deals d
 		JOIN apartments a ON a.id = d.id_apartment
-		WHERE a.building_id = $1
+		WHERE a.building_id = $1 AND d.status IN ('pending', 'contract')
 		ORDER BY d.id
 	`
 	rows, err := r.db.Query(ctx, query, buildingID)

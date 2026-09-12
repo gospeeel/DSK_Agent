@@ -71,6 +71,8 @@ class _PendingOffer:
     intent: OfferIntent
     deal_id: int
     original_message: str
+    parking_unit_id: int | None
+    storage_unit_id: int | None
     created_at: float
 
 
@@ -107,6 +109,8 @@ class OfferAgent:
         deal_id: int | None,
         user_id: int,
         session_id: int | None = None,
+        parking_unit_id: int | None = None,
+        storage_unit_id: int | None = None,
     ) -> str:
         if intent not in ("create_offer", "calculate_offer"):
             raise ValueError(f"Unsupported offer intent: {intent}")
@@ -121,6 +125,8 @@ class OfferAgent:
                 intent,
                 deal_id,
                 message,
+                parking_unit_id,
+                storage_unit_id,
             )
             return discount.response
 
@@ -131,6 +137,8 @@ class OfferAgent:
             deal_id,
             user_id,
             discount.value,
+            parking_unit_id,
+            storage_unit_id,
         )
 
     async def resume_pending(
@@ -154,6 +162,8 @@ class OfferAgent:
             pending.deal_id,
             user_id,
             discount.value,
+            pending.parking_unit_id,
+            pending.storage_unit_id,
         )
         return result, pending.intent
 
@@ -164,6 +174,8 @@ class OfferAgent:
         deal_id: int,
         user_id: int,
         requested_discount_percent: int | float | None,
+        parking_unit_id: int | None,
+        storage_unit_id: int | None,
     ) -> str:
         if requested_discount_percent is None:
             raise RuntimeError("Offer discount decision is incomplete")
@@ -173,6 +185,8 @@ class OfferAgent:
             "message": message,
             "intent": intent,
             "requested_discount_percent": requested_discount_percent,
+            "parking_unit_id": parking_unit_id,
+            "storage_unit_id": storage_unit_id,
             "approval_required": False,
         }
         result = await self._graph.run(initial_state)
@@ -262,6 +276,8 @@ class OfferAgent:
         intent: OfferIntent,
         deal_id: int,
         message: str,
+        parking_unit_id: int | None,
+        storage_unit_id: int | None,
     ) -> None:
         if session_id is None:
             return
@@ -277,6 +293,8 @@ class OfferAgent:
                 intent=intent,
                 deal_id=deal_id,
                 original_message=message,
+                parking_unit_id=parking_unit_id,
+                storage_unit_id=storage_unit_id,
                 created_at=time.monotonic(),
             )
 

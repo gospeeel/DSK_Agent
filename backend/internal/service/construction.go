@@ -148,4 +148,3 @@ func (s *constructionService) UpdateProgress(ctx context.Context, progress *doma
 func (s *constructionService) DeleteProgress(ctx context.Context, id int) error {
 	return s.repo.DeleteProgress(ctx, id)
 }
-

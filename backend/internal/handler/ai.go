@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -13,12 +14,22 @@ import (
 type AIHandler struct {
 	aiService   service.AIAgentService
 	chatService service.ChatService
+	audit       aiAuditWriter
 }
 
-func NewAIHandler(aiService service.AIAgentService, chatService service.ChatService) *AIHandler {
+type aiAuditWriter interface {
+	Record(ctx context.Context, actorID int, dealID, sessionID *int, action, requestText, responseText, agent, intent, status string) error
+}
+
+func NewAIHandler(aiService service.AIAgentService, chatService service.ChatService, audits ...aiAuditWriter) *AIHandler {
+	var audit aiAuditWriter
+	if len(audits) > 0 {
+		audit = audits[0]
+	}
 	return &AIHandler{
 		aiService:   aiService,
 		chatService: chatService,
+		audit:       audit,
 	}
 }
 
@@ -44,39 +55,50 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "deal_id must be a positive integer or null", http.StatusBadRequest)
 		return
 	}
-
-	var userID int
-	senderType := "client"
-
-	if user, ok := r.Context().Value("user").(*domain.User); ok && user != nil {
-		userID = user.ID
-		if user.Role == domain.RoleManager || user.Role == domain.RoleSupervisor {
-			senderType = "manager"
-		}
+	if req.ParkingUnitID != nil && *req.ParkingUnitID <= 0 {
+		http.Error(w, "parking_unit_id must be a positive integer or null", http.StatusBadRequest)
+		return
 	}
-	if userID <= 0 {
-		http.Error(w, "authenticated user is required", http.StatusUnauthorized)
+	if req.StorageUnitID != nil && *req.StorageUnitID <= 0 {
+		http.Error(w, "storage_unit_id must be a positive integer or null", http.StatusBadRequest)
 		return
 	}
 
+	user, _ := r.Context().Value("user").(*domain.User)
+	if user == nil || user.ID <= 0 {
+		http.Error(w, "authenticated user is required", http.StatusUnauthorized)
+		return
+	}
+	session, err := h.chatService.GetSessionByID(r.Context(), *req.SessionID)
+	if err != nil {
+		http.Error(w, "chat session not found", http.StatusNotFound)
+		return
+	}
+	if !canReadSession(user, session) || (user.Role == domain.RoleManager && !canManageSession(user, session)) {
+		http.Error(w, "FORBIDDEN", http.StatusForbidden)
+		return
+	}
+	userID := user.ID
+
 	payload := domain.AgentChatPayload{
-		UserID:    userID,
-		SessionID: *req.SessionID,
-		DealID:    req.DealID,
-		Message:   req.Message,
+		UserID:        userID,
+		SessionID:     *req.SessionID,
+		DealID:        req.DealID,
+		ParkingUnitID: req.ParkingUnitID,
+		StorageUnitID: req.StorageUnitID,
+		Message:       req.Message,
 	}
 
-	userIDForMessage := userID
-	_, _ = h.chatService.SendMessage(
-		r.Context(),
-		*req.SessionID,
-		&userIDForMessage,
-		senderType,
-		req.Message,
-	)
+	// Only a client's own AI conversation belongs in the client-visible chat.
+	// Staff assistance must never leak into that shared history.
+	if user.Role == domain.RoleUser {
+		userIDForMessage := userID
+		_, _ = h.chatService.SendMessage(r.Context(), *req.SessionID, &userIDForMessage, domain.SenderTypeClient, req.Message)
+	}
 
 	respData, err := h.aiService.SendChatRequest(r.Context(), payload)
 	if err != nil {
+		recordAIAction(r.Context(), h.audit, user.ID, req.DealID, req.SessionID, "chat", req.Message, err.Error(), "", "", "failed")
 		var agentError *service.AgentRPCError
 		if errors.As(err, &agentError) && agentError.Code == "FORBIDDEN" {
 			http.Error(w, "FORBIDDEN", http.StatusForbidden)
@@ -96,11 +118,22 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "AI service error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	responseText, agent, intent := "", "", ""
+	if respData != nil {
+		responseText, agent, intent = respData.Message, respData.Agent, respData.Intent
+	}
+	recordAIAction(r.Context(), h.audit, user.ID, req.DealID, req.SessionID, "chat", req.Message, responseText, agent, intent, "success")
 
-	if respData != nil && respData.Message != "" {
+	if user.Role == domain.RoleUser && respData != nil && respData.Message != "" {
 		_, _ = h.chatService.SendMessage(r.Context(), *req.SessionID, nil, "ai", respData.Message)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(respData)
+}
+
+func recordAIAction(ctx context.Context, audit aiAuditWriter, actorID int, dealID, sessionID *int, action, requestText, responseText, agent, intent, status string) {
+	if audit != nil {
+		_ = audit.Record(ctx, actorID, dealID, sessionID, action, requestText, responseText, agent, intent, status)
+	}
 }

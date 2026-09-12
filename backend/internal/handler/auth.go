@@ -28,6 +28,18 @@ type AuthHandler struct {
 	authService service.AuthService
 }
 
+func setAuthCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   86400,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 func NewAuthHandler(authService service.AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
 }
@@ -107,15 +119,7 @@ func (h *AuthHandler) LoginStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		Path:     "/",
-		MaxAge:   86400,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-	})
+	setAuthCookie(w, token)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"token": token,
@@ -140,15 +144,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    token,
-		Path:     "/",
-		MaxAge:   86400, // 24 hours
-		HttpOnly: true,
-		Secure:   false, // set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-	})
+	setAuthCookie(w, token)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"token": token,
@@ -230,6 +226,17 @@ func (h *AuthHandler) RequireStaffRole(next http.Handler) http.Handler {
 		user, ok := r.Context().Value("user").(*domain.User)
 		if !ok || (user.Role != domain.RoleManager && user.Role != domain.RoleSupervisor) {
 			http.Error(w, "forbidden: requires staff role", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (h *AuthHandler) RequireSupervisorRole(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, ok := r.Context().Value("user").(*domain.User)
+		if !ok || user == nil || user.Role != domain.RoleSupervisor {
+			http.Error(w, "forbidden: requires supervisor role", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)

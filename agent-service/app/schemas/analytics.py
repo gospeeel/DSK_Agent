@@ -29,6 +29,7 @@ class AnalyticsContext(BaseModel):
     apartment: ApartmentFacts
     building: BuildingFacts
     construction_events: list[ConstructionEventFacts]
+    exact_delivery_date_allowed: bool
 
 
 class AffectedDeal(BaseModel):

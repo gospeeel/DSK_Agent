@@ -13,6 +13,8 @@ class OfferState(TypedDict, total=False):
     message: str
     intent: Literal["create_offer", "calculate_offer"]
     requested_discount_percent: int | float
+    parking_unit_id: int | None
+    storage_unit_id: int | None
     deal: DealFacts
     client: OfferClientFacts
     apartment: ApartmentFacts

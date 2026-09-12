@@ -6,6 +6,7 @@ import (
 
 // BuildingStatus Enum
 type BuildingStatus string
+
 const (
 	BuildingStatusDesign       BuildingStatus = "design"
 	BuildingStatusConstruction BuildingStatus = "construction"
@@ -15,6 +16,7 @@ const (
 
 // WallMaterial Enum
 type WallMaterial string
+
 const (
 	WallMaterialPanel    WallMaterial = "panel"
 	WallMaterialMonolith WallMaterial = "monolith"
@@ -24,6 +26,7 @@ const (
 
 // FinishingType Enum
 type FinishingType string
+
 const (
 	FinishingTypeRough    FinishingType = "rough"
 	FinishingTypeWhiteBox FinishingType = "white_box"
@@ -32,6 +35,7 @@ const (
 
 // ApartmentStatus Enum
 type ApartmentStatus string
+
 const (
 	ApartmentStatusFree   ApartmentStatus = "free"
 	ApartmentStatusBooked ApartmentStatus = "booked"
@@ -40,6 +44,7 @@ const (
 
 // ProgressStage Enum
 type ProgressStage string
+
 const (
 	ProgressStageExcavation ProgressStage = "excavation"
 	ProgressStageFoundation ProgressStage = "foundation"
@@ -50,6 +55,7 @@ const (
 
 // ProgressStatus Enum
 type ProgressStatus string
+
 const (
 	ProgressStatusNotStarted ProgressStatus = "not_started"
 	ProgressStatusInProgress ProgressStatus = "in_progress"
@@ -78,6 +84,9 @@ type Building struct {
 	ActualDate           *time.Time     `json:"actual_date"`
 	Status               BuildingStatus `json:"status"`
 	TypeWallMaterial     WallMaterial   `json:"type_wall_material"`
+	ReadinessPercent     *int           `json:"readiness_percent,omitempty"`
+	ForecastDate         *time.Time     `json:"forecast_date,omitempty"`
+	DeliveryShiftDays    *int           `json:"delivery_shift_days,omitempty"`
 }
 
 type Apartment struct {
@@ -108,10 +117,15 @@ type ConstructionProgress struct {
 }
 
 type Competitor struct {
-	ID            int     `json:"id"`
-	ProjectName   string  `json:"project_name"`
-	District      string  `json:"district"`
-	PricePerSqm   *int64  `json:"price_per_sqm,omitempty"`
-	Advantages    *string `json:"advantages,omitempty"`
-	Disadvantages *string `json:"disadvantages,omitempty"`
+	ID            int        `json:"id"`
+	ProjectName   string     `json:"project_name"`
+	District      string     `json:"district"`
+	PricePerSqm   *int64     `json:"price_per_sqm,omitempty"`
+	Advantages    *string    `json:"advantages,omitempty"`
+	Disadvantages *string    `json:"disadvantages,omitempty"`
+	SourceURL     *string    `json:"source_url,omitempty"`
+	ObservedAt    *time.Time `json:"observed_at,omitempty"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	Rooms         *int       `json:"rooms,omitempty"`
+	Area          *float64   `json:"area,omitempty"`
 }

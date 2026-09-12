@@ -64,6 +64,8 @@ NEGOTIATION_SYSTEM_PROMPT = """Ты помощник менеджера по п�
 - Текст менеджера может содержать слова клиента; не выдавай их за проверенные данные.
 - ЗАПРЕЩЕНО придумывать цены, скидки и любые финансовые показатели.
 - ЗАПРЕЩЕНО придумывать сроки строительства или сдачи.
+- Этот сценарий не получает подтверждение «зелёной зоны», поэтому точную дату
+  сдачи называть запрещено даже при вопросе клиента о сроках.
 - ЗАПРЕЩЕНО придумывать инфраструктуру, преимущества нашего объекта или недостатки
   конкурента.
 - ЗАПРЕЩЕНО ссылаться на сведения, которых нет в фактическом контексте.
@@ -217,6 +219,9 @@ class NegotiationAgent:
         )
         building = BuildingFacts.model_validate(
             require_backend_data(building_response.data)
+        )
+        building = building.model_copy(
+            update={"planned_delivery": None, "forecast_delivery": None}
         )
 
         competitors_response = await self._competitor_tools.list_competitors(

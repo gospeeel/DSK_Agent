@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,7 @@ var (
 	ErrInvalidOfferState = errors.New("invalid offer state")
 	ErrOfferForbidden    = errors.New("offer operation forbidden")
 	ErrInvalidPrice      = errors.New("invalid apartment price")
+	ErrInvalidAncillary  = errors.New("invalid ancillary unit")
 )
 
 type DiscountPolicy struct {
@@ -31,25 +33,32 @@ type offerUserReader interface {
 }
 
 type offerStore interface {
-	GetApartmentPrice(ctx context.Context, apartmentID int) (int64, error)
+	GetApartmentOfferData(ctx context.Context, apartmentID int) (price int64, buildingID int, err error)
+	GetAncillaryUnit(ctx context.Context, id int) (*domain.AncillaryUnit, error)
 	Create(ctx context.Context, requestID string, offer *domain.Offer) (*domain.Offer, error)
 	GetByID(ctx context.Context, id int) (*domain.Offer, error)
 	GetByRequestID(ctx context.Context, requestID string) (*domain.Offer, error)
+	List(ctx context.Context, createdBy *int) ([]*domain.Offer, error)
 	MarkPendingApproval(ctx context.Context, id int) (*domain.Offer, error)
+	Decide(ctx context.Context, id, supervisorID int, approve bool, reason string) (*domain.Offer, error)
 }
 
 type OfferService interface {
-	Calculate(ctx context.Context, dealID, requestedBy int, discountPercent string) (*domain.OfferCalculation, error)
-	Create(ctx context.Context, requestID string, dealID, createdBy int, discountPercent, generatedText string) (*domain.Offer, error)
+	Calculate(ctx context.Context, dealID, requestedBy int, discountPercent string, selections ...domain.OfferSelection) (*domain.OfferCalculation, error)
+	Create(ctx context.Context, requestID string, dealID, createdBy int, discountPercent, generatedText string, selections ...domain.OfferSelection) (*domain.Offer, error)
 	RequestApproval(ctx context.Context, offerID, requestedBy int) (*domain.Offer, error)
 	Get(ctx context.Context, offerID int) (*domain.Offer, error)
+	GetForActor(ctx context.Context, offerID int, actor *domain.User) (*domain.Offer, error)
+	ListForActor(ctx context.Context, actor *domain.User) ([]*domain.Offer, error)
+	Decide(ctx context.Context, offerID int, actor *domain.User, approve bool, reason string) (*domain.Offer, error)
 }
 
 type offerService struct {
-	deals  offerDealReader
-	users  offerUserReader
-	store  offerStore
-	policy DiscountPolicy
+	deals        offerDealReader
+	users        offerUserReader
+	store        offerStore
+	policy       DiscountPolicy
+	policyReader discountPolicyReader
 }
 
 func NewOfferService(
@@ -58,6 +67,7 @@ func NewOfferService(
 	store offerStore,
 	managerMaxDiscount float64,
 	supervisorMaxDiscount float64,
+	readers ...discountPolicyReader,
 ) (OfferService, error) {
 	manager, err := percentStringToBasisPoints(strconv.FormatFloat(managerMaxDiscount, 'f', -1, 64))
 	if err != nil {
@@ -70,11 +80,16 @@ func NewOfferService(
 	if supervisor < manager {
 		return nil, errors.New("supervisor discount limit must not be lower than manager limit")
 	}
+	var reader discountPolicyReader
+	if len(readers) > 0 {
+		reader = readers[0]
+	}
 	return &offerService{
-		deals:  deals,
-		users:  users,
-		store:  store,
-		policy: DiscountPolicy{ManagerMaxBasisPoints: manager, SupervisorMaxBasisPoints: supervisor},
+		deals:        deals,
+		users:        users,
+		store:        store,
+		policy:       DiscountPolicy{ManagerMaxBasisPoints: manager, SupervisorMaxBasisPoints: supervisor},
+		policyReader: reader,
 	}, nil
 }
 
@@ -83,7 +98,12 @@ func (s *offerService) Calculate(
 	dealID int,
 	actorID int,
 	discountPercent string,
+	selections ...domain.OfferSelection,
 ) (*domain.OfferCalculation, error) {
+	selection := domain.OfferSelection{}
+	if len(selections) > 0 {
+		selection = selections[0]
+	}
 	discount, err := percentStringToBasisPoints(discountPercent)
 	if err != nil {
 		return nil, ErrInvalidDiscount
@@ -95,27 +115,79 @@ func (s *offerService) Calculate(
 	if deal.ApartmentID <= 0 {
 		return nil, repository.ErrApartmentNotFound
 	}
-	maxDiscount, err := s.maxDiscount(user.Role)
+	maxDiscount, err := s.maxDiscount(ctx, deal.ApartmentID, user.Role)
 	if err != nil {
 		return nil, err
 	}
-	basePrice, err := s.store.GetApartmentPrice(ctx, deal.ApartmentID)
+	apartmentPrice, buildingID, err := s.store.GetApartmentOfferData(ctx, deal.ApartmentID)
 	if err != nil {
 		return nil, err
 	}
-	if basePrice <= 0 {
+	if apartmentPrice <= 0 {
 		return nil, ErrInvalidPrice
 	}
+	parking, err := s.ancillarySelection(ctx, selection.ParkingUnitID, buildingID, domain.AncillaryKindParking)
+	if err != nil {
+		return nil, err
+	}
+	storage, err := s.ancillarySelection(ctx, selection.StorageUnitID, buildingID, domain.AncillaryKindStorage)
+	if err != nil {
+		return nil, err
+	}
+	basePrice := apartmentPrice
+	for _, unit := range []*domain.AncillaryUnit{parking, storage} {
+		if unit == nil {
+			continue
+		}
+		if unit.Price > math.MaxInt64-basePrice {
+			return nil, ErrInvalidPrice
+		}
+		basePrice += unit.Price
+	}
 	discountAmount := roundedRatio(basePrice, discount, 10000)
-	return &domain.OfferCalculation{
+	calculation := &domain.OfferCalculation{
 		DealID:             deal.ID,
 		BasePrice:          basePrice,
+		ApartmentPrice:     apartmentPrice,
 		DiscountPercent:    formatBasisPoints(discount),
 		DiscountAmount:     discountAmount,
 		FinalPrice:         basePrice - discountAmount,
 		MaxAllowedDiscount: formatBasisPoints(maxDiscount),
 		RequiresApproval:   discount > maxDiscount,
-	}, nil
+	}
+	if parking != nil {
+		calculation.ParkingUnitID = &parking.ID
+		calculation.ParkingNumber = &parking.Number
+		calculation.ParkingPrice = parking.Price
+	}
+	if storage != nil {
+		calculation.StorageUnitID = &storage.ID
+		calculation.StorageNumber = &storage.Number
+		calculation.StoragePrice = storage.Price
+	}
+	return calculation, nil
+}
+
+func (s *offerService) ancillarySelection(
+	ctx context.Context,
+	id *int,
+	buildingID int,
+	kind domain.AncillaryKind,
+) (*domain.AncillaryUnit, error) {
+	if id == nil {
+		return nil, nil
+	}
+	if *id <= 0 {
+		return nil, ErrInvalidAncillary
+	}
+	unit, err := s.store.GetAncillaryUnit(ctx, *id)
+	if err != nil {
+		return nil, err
+	}
+	if unit.BuildingID != buildingID || unit.Kind != kind || unit.Status != domain.ApartmentStatusFree {
+		return nil, ErrInvalidAncillary
+	}
+	return unit, nil
 }
 
 func (s *offerService) Create(
@@ -125,16 +197,23 @@ func (s *offerService) Create(
 	actorID int,
 	discountPercent string,
 	generatedText string,
+	selections ...domain.OfferSelection,
 ) (*domain.Offer, error) {
+	selection := domain.OfferSelection{}
+	if len(selections) > 0 {
+		selection = selections[0]
+	}
 	// Authorize before serving an idempotent result so a reused request_id cannot
 	// disclose or reuse an offer belonging to another actor/deal.
-	calculation, err := s.Calculate(ctx, dealID, actorID, discountPercent)
+	calculation, err := s.Calculate(ctx, dealID, actorID, discountPercent, selection)
 	if err != nil {
 		return nil, err
 	}
 	existing, err := s.store.GetByRequestID(ctx, requestID)
 	if err == nil {
-		if existing.DealID != dealID || existing.CreatedBy != actorID {
+		if existing.DealID != dealID || existing.CreatedBy != actorID ||
+			!sameOptionalID(existing.ParkingUnitID, selection.ParkingUnitID) ||
+			!sameOptionalID(existing.StorageUnitID, selection.StorageUnitID) {
 			return nil, ErrOfferForbidden
 		}
 		return existing, nil
@@ -152,10 +231,20 @@ func (s *offerService) Create(
 		BasePrice:        calculation.BasePrice,
 		DiscountPercent:  calculation.DiscountPercent,
 		FinalPrice:       calculation.FinalPrice,
+		ParkingUnitID:    calculation.ParkingUnitID,
+		ParkingNumber:    calculation.ParkingNumber,
+		ParkingPrice:     calculation.ParkingPrice,
+		StorageUnitID:    calculation.StorageUnitID,
+		StorageNumber:    calculation.StorageNumber,
+		StoragePrice:     calculation.StoragePrice,
 		GeneratedText:    strings.TrimSpace(generatedText),
 		Status:           status,
 		ApprovalRequired: calculation.RequiresApproval,
 	})
+}
+
+func sameOptionalID(left, right *int) bool {
+	return left == nil && right == nil || left != nil && right != nil && *left == *right
 }
 
 func (s *offerService) RequestApproval(ctx context.Context, offerID, actorID int) (*domain.Offer, error) {
@@ -213,6 +302,9 @@ func (s *offerService) authorizeDeal(
 }
 
 func authorizeOfferActor(user *domain.User, deal *domain.Deal) error {
+	if user == nil || deal == nil {
+		return ErrOfferForbidden
+	}
 	switch user.Role {
 	case domain.RoleSupervisor:
 		return nil
@@ -228,7 +320,85 @@ func (s *offerService) Get(ctx context.Context, offerID int) (*domain.Offer, err
 	return s.store.GetByID(ctx, offerID)
 }
 
-func (s *offerService) maxDiscount(role domain.Role) (int64, error) {
+func (s *offerService) GetForActor(ctx context.Context, offerID int, actor *domain.User) (*domain.Offer, error) {
+	offer, err := s.store.GetByID(ctx, offerID)
+	if err != nil {
+		return nil, err
+	}
+	deal, err := s.deals.GetDealByID(ctx, offer.DealID)
+	if err != nil {
+		return nil, err
+	}
+	if !canReadOffer(actor, deal) {
+		return nil, ErrOfferForbidden
+	}
+	return offer, nil
+}
+
+func (s *offerService) ListForActor(ctx context.Context, actor *domain.User) ([]*domain.Offer, error) {
+	if actor == nil {
+		return nil, ErrOfferForbidden
+	}
+	if actor.Role != domain.RoleSupervisor && actor.Role != domain.RoleManager && actor.Role != domain.RoleUser {
+		return nil, ErrOfferForbidden
+	}
+	items, err := s.store.List(ctx, nil)
+	if err != nil || actor.Role == domain.RoleSupervisor {
+		return items, err
+	}
+	visible := make([]*domain.Offer, 0, len(items))
+	for _, offer := range items {
+		deal, dealErr := s.deals.GetDealByID(ctx, offer.DealID)
+		if dealErr != nil {
+			return nil, dealErr
+		}
+		if canReadOffer(actor, deal) {
+			visible = append(visible, offer)
+		}
+	}
+	return visible, nil
+}
+
+func canReadOffer(user *domain.User, deal *domain.Deal) bool {
+	if user == nil || deal == nil {
+		return false
+	}
+	return user.Role == domain.RoleSupervisor ||
+		(user.Role == domain.RoleManager && deal.EmployeeID == user.ID) ||
+		(user.Role == domain.RoleUser && deal.UserID == user.ID)
+}
+
+func (s *offerService) Decide(ctx context.Context, offerID int, actor *domain.User, approve bool, reason string) (*domain.Offer, error) {
+	if actor == nil || actor.Role != domain.RoleSupervisor {
+		return nil, ErrOfferForbidden
+	}
+	if !approve && strings.TrimSpace(reason) == "" {
+		return nil, ErrInvalidOfferState
+	}
+	offer, err := s.store.GetByID(ctx, offerID)
+	if err != nil {
+		return nil, err
+	}
+	if offer.Status != domain.OfferStatusPendingApproval || !offer.ApprovalRequired {
+		return nil, ErrInvalidOfferState
+	}
+	updated, err := s.store.Decide(ctx, offerID, actor.ID, approve, strings.TrimSpace(reason))
+	if errors.Is(err, repository.ErrOfferNotFound) {
+		return nil, ErrInvalidOfferState
+	}
+	return updated, err
+}
+
+func (s *offerService) maxDiscount(ctx context.Context, apartmentID int, role domain.Role) (int64, error) {
+	if s.policyReader != nil {
+		value, err := s.policyReader.GetActiveMax(ctx, apartmentID, role)
+		if err == nil {
+			return percentStringToBasisPoints(value)
+		}
+		if !errors.Is(err, repository.ErrDiscountPolicyNotFound) {
+			return 0, err
+		}
+	}
 	switch role {
 	case domain.RoleManager:
 		return s.policy.ManagerMaxBasisPoints, nil

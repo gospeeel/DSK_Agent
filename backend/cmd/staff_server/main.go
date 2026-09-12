@@ -40,7 +40,15 @@ func main() {
 	userHandler := handler.NewUserHandler(userService, authService)
 
 	dealRepo := repository.NewDealRepository(dbpool)
-	dealService := service.NewDealService(dealRepo)
+	discountPolicyRepo := repository.NewDiscountPolicyRepository(dbpool)
+	discountPolicyHandler := handler.NewDiscountPolicyHandler(discountPolicyRepo)
+	ancillaryUnitRepo := repository.NewAncillaryUnitRepository(dbpool)
+	ancillaryUnitHandler := handler.NewAncillaryUnitHandler(ancillaryUnitRepo)
+	erpRepo := repository.NewERPRepository(dbpool)
+	erpHandler := handler.NewERPHandler(erpRepo)
+	reminderRepo := repository.NewReminderRepository(dbpool)
+	reminderHandler := handler.NewReminderHandler(reminderRepo)
+	dealService := service.NewDealService(dealRepo, cfg.MaxManagerDiscountPercent, cfg.MaxSupervisorDiscountPercent, discountPolicyRepo)
 	dealHandler := handler.NewDealHandler(dealService)
 
 	emailSender := service.NewSMTPEmailSender(cfg)
@@ -57,6 +65,7 @@ func main() {
 
 	dialogAnalysisService := service.NewDialogAnalysisService(dealRepo, chatRepo)
 	competitorRepo := repository.NewCompetitorRepository(dbpool)
+	competitorHandler := handler.NewCompetitorHandler(competitorRepo)
 	recommendationRepo := repository.NewRecommendationRepository(dbpool)
 	offerRepo := repository.NewOfferRepository(dbpool)
 	offerService, err := service.NewOfferService(
@@ -65,14 +74,20 @@ func main() {
 		offerRepo,
 		cfg.MaxManagerDiscountPercent,
 		cfg.MaxSupervisorDiscountPercent,
+		discountPolicyRepo,
 	)
 	if err != nil {
 		log.Fatalf("Invalid offer discount policy: %v\n", err)
 	}
+	offerDeliveryRepo := repository.NewOfferDeliveryRepository(dbpool)
+	offerDeliveryService := service.NewOfferDeliveryService(offerDeliveryRepo, dealRepo, userRepo, service.NewSMTPOfferAttachmentSender(cfg))
+	offerHandler := handler.NewOfferHandler(offerService, offerDeliveryService)
 
 	aiService := service.NewAIAgentService(cfg.RabbitMQURL)
 	defer aiService.Close()
-	aiHandler := handler.NewAIHandler(aiService, chatService)
+	aiAuditRepo := repository.NewAIAuditRepository(dbpool)
+	aiHandler := handler.NewAIHandler(aiService, chatService, aiAuditRepo)
+	dialogAIHandler := handler.NewDialogAIHandler(aiService, dealService, aiAuditRepo)
 
 	backendRPCDispatcher := broker.NewBackendRPCDispatcher(
 		dealService,
@@ -85,6 +100,7 @@ func main() {
 		competitorRepo,
 		recommendationRepo,
 		offerService,
+		erpRepo,
 	)
 	backendRPCConsumer := broker.NewBackendRPCConsumer(aiService, backendRPCDispatcher)
 	if err := backendRPCConsumer.Start(context.Background()); err != nil {
@@ -107,7 +123,6 @@ func main() {
 	})
 	r.Get("/swagger/*", swagger.Handler(swagger.StaffSpec, "Staff Server API - Swagger UI"))
 
-	r.Post("/api/auth/register", authHandler.CreateStaff)
 	r.Post("/api/auth/login", authHandler.LoginStaff)
 	r.Post("/api/auth/logout", authHandler.Logout)
 
@@ -116,6 +131,7 @@ func main() {
 		r.Use(authHandler.RequireStaffRole)
 
 		r.Get("/api/staff/profile", authHandler.Profile)
+		r.With(authHandler.RequireSupervisorRole).Post("/api/auth/register", authHandler.CreateStaff)
 		r.Get("/api/users", userHandler.GetUsers)
 		r.Get("/api/users/{id}", userHandler.GetUser)
 
@@ -134,33 +150,59 @@ func main() {
 		r.Get("/api/deals/{id}", dealHandler.GetDeal)
 		r.Put("/api/deals/{id}/status", dealHandler.UpdateDealStatus)
 
+		// Commercial offers and approval workflow
+		r.Get("/api/offers", offerHandler.List)
+		r.Get("/api/offers/{id}", offerHandler.Get)
+		r.Post("/api/offers/calculate", offerHandler.Calculate)
+		r.Post("/api/offers", offerHandler.Create)
+		r.Post("/api/offers/{id}/approval-request", offerHandler.RequestApproval)
+		r.With(authHandler.RequireSupervisorRole).Post("/api/offers/{id}/approve", offerHandler.Approve)
+		r.With(authHandler.RequireSupervisorRole).Post("/api/offers/{id}/reject", offerHandler.Reject)
+		r.Get("/api/offers/{id}/pdf", offerHandler.PDF)
+		r.Post("/api/offers/{id}/send", offerHandler.Send)
+
 		// Staff AI Assistant
 		r.Post("/api/ai/chat", aiHandler.Chat)
+		r.Post("/api/ai/dialog/analyze", dialogAIHandler.Analyze)
+		r.Post("/api/ai/dialog/reply-assist", dialogAIHandler.ReplyAssist)
+
+		r.Get("/api/competitors", competitorHandler.List)
+		r.With(authHandler.RequireSupervisorRole).Post("/api/competitors", competitorHandler.Create)
+		r.With(authHandler.RequireSupervisorRole).Put("/api/competitors/{id}", competitorHandler.Update)
 
 		// Construction CRUD
 		r.Post("/api/complexes", constructionHandler.CreateComplex)
 		r.Get("/api/complexes", constructionHandler.GetAllComplexes)
 		r.Get("/api/complexes/{id}", constructionHandler.GetComplex)
-		r.Put("/api/complexes/{id}", constructionHandler.UpdateComplex)
-		r.Delete("/api/complexes/{id}", constructionHandler.DeleteComplex)
+		r.With(authHandler.RequireSupervisorRole).Put("/api/complexes/{id}", constructionHandler.UpdateComplex)
 		r.Get("/api/complexes/{complexId}/buildings", constructionHandler.GetBuildingsByComplex)
 
 		r.Post("/api/buildings", constructionHandler.CreateBuilding)
 		r.Get("/api/buildings/{id}", constructionHandler.GetBuilding)
-		r.Put("/api/buildings/{id}", constructionHandler.UpdateBuilding)
-		r.Delete("/api/buildings/{id}", constructionHandler.DeleteBuilding)
+		r.With(authHandler.RequireSupervisorRole).Put("/api/buildings/{id}", constructionHandler.UpdateBuilding)
 		r.Get("/api/buildings/{buildingId}/apartments", constructionHandler.GetApartmentsByBuilding)
 		r.Get("/api/buildings/{buildingId}/progress", constructionHandler.GetProgressByBuilding)
 
 		r.Post("/api/apartments", constructionHandler.CreateApartment)
 		r.Get("/api/apartments/{id}", constructionHandler.GetApartment)
-		r.Put("/api/apartments/{id}", constructionHandler.UpdateApartment)
-		r.Delete("/api/apartments/{id}", constructionHandler.DeleteApartment)
+		r.With(authHandler.RequireSupervisorRole).Put("/api/apartments/{id}", constructionHandler.UpdateApartment)
 
 		r.Post("/api/progress", constructionHandler.CreateProgress)
 		r.Get("/api/progress/{id}", constructionHandler.GetProgress)
-		r.Put("/api/progress/{id}", constructionHandler.UpdateProgress)
-		r.Delete("/api/progress/{id}", constructionHandler.DeleteProgress)
+		r.With(authHandler.RequireSupervisorRole).Put("/api/progress/{id}", constructionHandler.UpdateProgress)
+
+		r.Get("/api/buildings/{buildingId}/discount-policies", discountPolicyHandler.List)
+		r.With(authHandler.RequireSupervisorRole).Post("/api/discount-policies", discountPolicyHandler.Create)
+		r.Get("/api/buildings/{buildingId}/ancillary-units", ancillaryUnitHandler.List)
+		r.Post("/api/ancillary-units", ancillaryUnitHandler.Create)
+		r.With(authHandler.RequireSupervisorRole).Put("/api/ancillary-units/{id}", ancillaryUnitHandler.Update)
+		r.Get("/api/buildings/{buildingId}/erp", erpHandler.List)
+		r.Post("/api/erp/events", erpHandler.CreateEvent)
+		r.Post("/api/erp/material-stocks", erpHandler.UpsertStock)
+		r.Post("/api/erp/production-schedules", erpHandler.CreateSchedule)
+		r.Get("/api/reminders", reminderHandler.List)
+		r.Post("/api/reminders", reminderHandler.Create)
+		r.Put("/api/reminders/{id}/complete", reminderHandler.Complete)
 	})
 
 	log.Printf("Starting Staff Server on port %s", port)

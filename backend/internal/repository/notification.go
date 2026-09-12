@@ -5,17 +5,34 @@ import (
 	"errors"
 
 	"backend/internal/domain"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
 
 var ErrNotificationNotFound = errors.New("notification not found")
 
 type NotificationRepository interface {
 	CreateNotification(ctx context.Context, n *domain.Notification) (*domain.Notification, error)
+	ClaimConstructionState(ctx context.Context, progressID int, fingerprint string) (bool, error)
 	GetNotificationsByUserID(ctx context.Context, userID int, unreadOnly bool) ([]*domain.Notification, error)
 	MarkAsRead(ctx context.Context, id int, userID int) error
 	MarkAllAsRead(ctx context.Context, userID int) error
+}
+
+func (r *postgresNotificationRepository) ClaimConstructionState(ctx context.Context, progressID int, fingerprint string) (bool, error) {
+	var claimed int
+	err := r.db.QueryRow(ctx, `
+		INSERT INTO construction_notification_state (progress_id, fingerprint, updated_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (progress_id) DO UPDATE
+		SET fingerprint = EXCLUDED.fingerprint, updated_at = NOW()
+		WHERE construction_notification_state.fingerprint IS DISTINCT FROM EXCLUDED.fingerprint
+		RETURNING progress_id
+	`, progressID, fingerprint).Scan(&claimed)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 type postgresNotificationRepository struct {

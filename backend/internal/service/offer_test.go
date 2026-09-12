@@ -35,21 +35,30 @@ func (f *fakeOfferUserReader) GetUserByID(_ context.Context, id int) (*domain.Us
 }
 
 type fakeOfferStore struct {
-	price    int64
-	priceErr error
-	offers   map[int]*domain.Offer
-	requests map[string]*domain.Offer
-	nextID   int
+	price      int64
+	buildingID int
+	priceErr   error
+	units      map[int]*domain.AncillaryUnit
+	offers     map[int]*domain.Offer
+	requests   map[string]*domain.Offer
+	nextID     int
 }
 
 func newFakeOfferStore(price int64) *fakeOfferStore {
 	return &fakeOfferStore{
-		price: price, offers: map[int]*domain.Offer{}, requests: map[string]*domain.Offer{}, nextID: 1,
+		price: price, buildingID: 20, units: map[int]*domain.AncillaryUnit{}, offers: map[int]*domain.Offer{}, requests: map[string]*domain.Offer{}, nextID: 1,
 	}
 }
 
-func (f *fakeOfferStore) GetApartmentPrice(context.Context, int) (int64, error) {
-	return f.price, f.priceErr
+func (f *fakeOfferStore) GetApartmentOfferData(context.Context, int) (int64, int, error) {
+	return f.price, f.buildingID, f.priceErr
+}
+
+func (f *fakeOfferStore) GetAncillaryUnit(_ context.Context, id int) (*domain.AncillaryUnit, error) {
+	if unit := f.units[id]; unit != nil {
+		return unit, nil
+	}
+	return nil, repository.ErrAncillaryUnitNotFound
 }
 
 func (f *fakeOfferStore) Create(_ context.Context, requestID string, offer *domain.Offer) (*domain.Offer, error) {
@@ -78,12 +87,38 @@ func (f *fakeOfferStore) GetByRequestID(_ context.Context, requestID string) (*d
 	return nil, repository.ErrOfferNotFound
 }
 
+func (f *fakeOfferStore) List(_ context.Context, createdBy *int) ([]*domain.Offer, error) {
+	items := make([]*domain.Offer, 0)
+	for _, offer := range f.offers {
+		if createdBy == nil || offer.CreatedBy == *createdBy {
+			items = append(items, offer)
+		}
+	}
+	return items, nil
+}
+
 func (f *fakeOfferStore) MarkPendingApproval(_ context.Context, id int) (*domain.Offer, error) {
 	offer := f.offers[id]
 	if offer == nil || offer.Status != domain.OfferStatusDraft || !offer.ApprovalRequired {
 		return nil, repository.ErrOfferNotFound
 	}
 	offer.Status = domain.OfferStatusPendingApproval
+	return offer, nil
+}
+
+func (f *fakeOfferStore) Decide(_ context.Context, id, supervisorID int, approve bool, reason string) (*domain.Offer, error) {
+	offer := f.offers[id]
+	if offer == nil || offer.Status != domain.OfferStatusPendingApproval {
+		return nil, repository.ErrOfferNotFound
+	}
+	if approve {
+		offer.Status = domain.OfferStatusApproved
+		offer.ApprovedBy = &supervisorID
+	} else {
+		offer.Status = domain.OfferStatusRejected
+		offer.RejectedBy = &supervisorID
+		offer.RejectionReason = &reason
+	}
 	return offer, nil
 }
 
@@ -106,6 +141,59 @@ func TestOfferCalculateManagerWithinAndOverLimit(t *testing.T) {
 	over, err := service.Calculate(context.Background(), 10, 15, "7")
 	if err != nil || !over.RequiresApproval || over.FinalPrice != 13206000 || over.MaxAllowedDiscount != "5" {
 		t.Fatalf("unexpected over-limit calculation: %#v err=%v", over, err)
+	}
+}
+
+func TestOfferCalculationAndSavedOfferIncludeAncillaryUnits(t *testing.T) {
+	service, store := newTestOfferService(domain.RoleManager, 14_200_000)
+	parkingID, storageID := 41, 42
+	store.units[parkingID] = &domain.AncillaryUnit{
+		ID: parkingID, BuildingID: 20, Kind: domain.AncillaryKindParking,
+		Number: "P-041", Price: 1_250_000, Status: domain.ApartmentStatusFree,
+	}
+	store.units[storageID] = &domain.AncillaryUnit{
+		ID: storageID, BuildingID: 20, Kind: domain.AncillaryKindStorage,
+		Number: "K-018", Price: 480_000, Status: domain.ApartmentStatusFree,
+	}
+	selection := domain.OfferSelection{ParkingUnitID: &parkingID, StorageUnitID: &storageID}
+
+	calculation, err := service.Calculate(context.Background(), 10, 15, "5", selection)
+	if err != nil || calculation.ApartmentPrice != 14_200_000 || calculation.BasePrice != 15_930_000 ||
+		calculation.DiscountAmount != 796_500 || calculation.FinalPrice != 15_133_500 {
+		t.Fatalf("unexpected ancillary calculation: %#v err=%v", calculation, err)
+	}
+
+	created, err := service.Create(context.Background(), "with_ancillary", 10, 15, "5", "Text", selection)
+	if err != nil || created.ParkingUnitID == nil || *created.ParkingUnitID != parkingID ||
+		created.ParkingPrice != 1_250_000 || created.StorageUnitID == nil ||
+		*created.StorageUnitID != storageID || created.StoragePrice != 480_000 {
+		t.Fatalf("saved offer lost ancillary snapshot: %#v err=%v", created, err)
+	}
+}
+
+func TestOfferRejectsUnavailableOrForeignAncillaryUnit(t *testing.T) {
+	service, store := newTestOfferService(domain.RoleManager, 1_000_000)
+	unitID := 41
+	cases := []*domain.AncillaryUnit{
+		{ID: unitID, BuildingID: 99, Kind: domain.AncillaryKindParking, Price: 1, Status: domain.ApartmentStatusFree},
+		{ID: unitID, BuildingID: 20, Kind: domain.AncillaryKindStorage, Price: 1, Status: domain.ApartmentStatusFree},
+		{ID: unitID, BuildingID: 20, Kind: domain.AncillaryKindParking, Price: 1, Status: domain.ApartmentStatusBooked},
+	}
+	for _, unit := range cases {
+		store.units[unitID] = unit
+		_, err := service.Calculate(context.Background(), 10, 15, "0", domain.OfferSelection{ParkingUnitID: &unitID})
+		if !errors.Is(err, ErrInvalidAncillary) {
+			t.Fatalf("expected invalid ancillary unit for %#v, got %v", unit, err)
+		}
+	}
+}
+
+func TestOfferCalculateUsesBuildingDiscountPolicy(t *testing.T) {
+	service, _ := newTestOfferService(domain.RoleManager, 1_000_000)
+	service.policyReader = fakeDiscountPolicyReader{value: "2.5"}
+	calculation, err := service.Calculate(context.Background(), 10, 15, "3")
+	if err != nil || !calculation.RequiresApproval || calculation.MaxAllowedDiscount != "2.5" {
+		t.Fatalf("unexpected building policy calculation: %#v err=%v", calculation, err)
 	}
 }
 
@@ -313,6 +401,28 @@ func TestOfferGetFoundAndNotFound(t *testing.T) {
 	}
 	if _, err := service.Get(context.Background(), 999); !errors.Is(err, repository.ErrOfferNotFound) {
 		t.Fatalf("expected not found, got %v", err)
+	}
+}
+
+func TestOfferListAndDecisionRespectRoles(t *testing.T) {
+	service, _ := newTestOfferService(domain.RoleManager, 1000000)
+	draft, err := service.Create(context.Background(), "decision", 10, 15, "7", "Text")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.RequestApproval(context.Background(), draft.ID, 15); err != nil {
+		t.Fatal(err)
+	}
+	items, err := service.ListForActor(context.Background(), &domain.User{ID: 15, Role: domain.RoleManager})
+	if err != nil || len(items) != 1 {
+		t.Fatalf("unexpected manager list: %#v err=%v", items, err)
+	}
+	if _, err := service.Decide(context.Background(), draft.ID, &domain.User{ID: 15, Role: domain.RoleManager}, true, ""); !errors.Is(err, ErrOfferForbidden) {
+		t.Fatalf("manager decision must be forbidden: %v", err)
+	}
+	approved, err := service.Decide(context.Background(), draft.ID, &domain.User{ID: 20, Role: domain.RoleSupervisor}, true, "")
+	if err != nil || approved.Status != domain.OfferStatusApproved || approved.ApprovedBy == nil || *approved.ApprovedBy != 20 {
+		t.Fatalf("unexpected supervisor decision: %#v err=%v", approved, err)
 	}
 }
 

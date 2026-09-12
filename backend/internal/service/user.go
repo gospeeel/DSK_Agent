@@ -11,8 +11,18 @@ import (
 type UserService interface {
 	GetUser(ctx context.Context, id int) (*domain.User, error)
 	GetAllUsers(ctx context.Context) ([]*domain.User, error)
+	GetUsersForEmployee(ctx context.Context, employeeID int) ([]*domain.User, error)
+	CanEmployeeAccessUser(ctx context.Context, employeeID, userID int) (bool, error)
 	UpdateUser(ctx context.Context, id int, req *domain.UpdateUserRequest) (*domain.User, error)
 	UpdateClientPreferences(ctx context.Context, id int, budgetMax *int64, preferences map[string]any) (*domain.ClientPreferences, error)
+}
+
+func (s *userService) GetUsersForEmployee(ctx context.Context, employeeID int) ([]*domain.User, error) {
+	return s.repo.GetUsersForEmployee(ctx, employeeID)
+}
+
+func (s *userService) CanEmployeeAccessUser(ctx context.Context, employeeID, userID int) (bool, error) {
+	return s.repo.CanEmployeeAccessUser(ctx, employeeID, userID)
 }
 
 func (s *userService) UpdateClientPreferences(

@@ -260,7 +260,29 @@ def test_analytics_prompt_forbids_unsupported_factual_claims() -> None:
     assert "completion_percentage" in prompt
     assert "если оно null, не придумывай процент" in prompt
     assert "building.planned_delivery" in prompt
-    assert "обязательно назови эту дату точно" in prompt
+    assert "только когда exact_delivery_date_allowed=true" in prompt
+
+
+@pytest.mark.asyncio
+async def test_exact_delivery_date_is_blocked_when_construction_has_risk() -> None:
+    (
+        llm,
+        deal_tools,
+        apartment_tools,
+        building_tools,
+        construction_tools,
+        messages_tools,
+        client_tools,
+    ) = make_dependencies()
+    construction_tools.get_construction_events.return_value = backend_response(
+        {"events": [{"type": "supply", "title": "Риск поставки", "risk_level": "medium", "delay_days": 0}]}
+    )
+    agent = AnalyticsAgent(llm, deal_tools, apartment_tools, building_tools, construction_tools, messages_tools, client_tools)
+
+    await agent.generate("Назови срок", "analyze_risk", DEAL_ID)
+
+    assert '"exact_delivery_date_allowed": false' in llm.generate.await_args.args[0]
+    assert '"planned_delivery": null' in llm.generate.await_args.args[0]
 
 
 @pytest.mark.asyncio

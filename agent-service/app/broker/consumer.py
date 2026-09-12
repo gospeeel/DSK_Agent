@@ -170,12 +170,21 @@ class AgentConsumer:
                     ):
                         if self._offer_agent is None:
                             raise RuntimeError("Offer agent is not configured")
+                        selection = {
+                            key: value
+                            for key, value in {
+                                "parking_unit_id": request.payload.parking_unit_id,
+                                "storage_unit_id": request.payload.storage_unit_id,
+                            }.items()
+                            if value is not None
+                        }
                         answer = await self._offer_agent.generate(
                             request.payload.message,
                             cast(OfferIntent, decision.intent),
                             request.payload.deal_id,
                             request.payload.user_id,
                             request.payload.session_id,
+                            **selection,
                         )
                     else:
                         answer = await self._llm.generate(request.payload.message)

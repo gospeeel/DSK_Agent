@@ -199,6 +199,17 @@ async def test_create_offer_uses_contract_routing_key_and_action() -> None:
 
 
 @pytest.mark.asyncio
+async def test_offer_tools_forward_selected_ancillary_units() -> None:
+    rpc = Mock(call=AsyncMock(return_value=Mock()))
+    tool = OfferTools(rpc)
+
+    await tool.calculate_offer(101, 15, 3, parking_unit_id=41, storage_unit_id=42)
+
+    assert rpc.call.await_args.kwargs["payload"]["parking_unit_id"] == 41
+    assert rpc.call.await_args.kwargs["payload"]["storage_unit_id"] == 42
+
+
+@pytest.mark.asyncio
 async def test_request_offer_approval_uses_contract_routing_key_and_action() -> None:
     rpc = Mock(call=AsyncMock(return_value=Mock()))
     tool = OfferTools(rpc)

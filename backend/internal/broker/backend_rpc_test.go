@@ -106,15 +106,22 @@ type fakeOfferWorkflow struct {
 	dealID      int
 	userID      int
 	discount    string
+	selection   domain.OfferSelection
 }
 
-func (f *fakeOfferWorkflow) Calculate(_ context.Context, dealID, userID int, discount string) (*domain.OfferCalculation, error) {
+func (f *fakeOfferWorkflow) Calculate(_ context.Context, dealID, userID int, discount string, selections ...domain.OfferSelection) (*domain.OfferCalculation, error) {
 	f.dealID, f.userID, f.discount = dealID, userID, discount
+	if len(selections) > 0 {
+		f.selection = selections[0]
+	}
 	return f.calculation, f.err
 }
 
-func (f *fakeOfferWorkflow) Create(_ context.Context, requestID string, dealID, userID int, discount, _ string) (*domain.Offer, error) {
+func (f *fakeOfferWorkflow) Create(_ context.Context, requestID string, dealID, userID int, discount, _ string, selections ...domain.OfferSelection) (*domain.Offer, error) {
 	f.requestID, f.dealID, f.userID, f.discount = requestID, dealID, userID, discount
+	if len(selections) > 0 {
+		f.selection = selections[0]
+	}
 	return f.offer, f.err
 }
 

@@ -159,10 +159,19 @@ class OfferGraph:
 
     async def _calculate_offer(self, state: OfferState) -> dict:
         try:
+            selection = {
+                key: value
+                for key, value in {
+                    "parking_unit_id": state.get("parking_unit_id"),
+                    "storage_unit_id": state.get("storage_unit_id"),
+                }.items()
+                if value is not None
+            }
             response = await self._offer_tools.calculate_offer(
                 state["deal_id"],
                 state["user_id"],
                 state["requested_discount_percent"],
+                **selection,
             )
             calculation = OfferCalculation.model_validate(
                 require_backend_data(response.data)
@@ -219,11 +228,20 @@ class OfferGraph:
             state["calculation"],
         )
         try:
+            selection = {
+                key: value
+                for key, value in {
+                    "parking_unit_id": state.get("parking_unit_id"),
+                    "storage_unit_id": state.get("storage_unit_id"),
+                }.items()
+                if value is not None
+            }
             response = await self._offer_tools.create_offer(
                 state["deal_id"],
                 state["user_id"],
                 state["calculation"].discount_percent,
                 state["generated_text"],
+                **selection,
             )
             created = OfferCreatedData.model_validate(
                 require_backend_data(response.data)
@@ -337,7 +355,23 @@ class OfferGraph:
         return "\n".join(
             [
                 ", ".join(apartment_details),
-                f"Базовая стоимость: {OfferGraph._format_money(calculation.base_price)} ₽",
+                f"Базовая стоимость: {OfferGraph._format_money(calculation.apartment_price or 0)} ₽",
+                *(
+                    [f"Парковка {calculation.parking_number or ''}: {OfferGraph._format_money(calculation.parking_price)} ₽"]
+                    if calculation.parking_unit_id is not None
+                    else []
+                ),
+                *(
+                    [f"Кладовая {calculation.storage_number or ''}: {OfferGraph._format_money(calculation.storage_price)} ₽"]
+                    if calculation.storage_unit_id is not None
+                    else []
+                ),
+                *(
+                    [f"Стоимость до скидки: {OfferGraph._format_money(calculation.base_price)} ₽"]
+                    if calculation.parking_unit_id is not None
+                    or calculation.storage_unit_id is not None
+                    else []
+                ),
                 f"Скидка: {calculation.discount_percent:g}%",
                 f"Итоговая стоимость: {OfferGraph._format_money(calculation.final_price)} ₽",
             ]

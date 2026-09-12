@@ -86,6 +86,12 @@ type constructionReader interface {
 	GetProgressByBuildingID(ctx context.Context, buildingID int) ([]*domain.ConstructionProgress, error)
 }
 
+type erpReader interface {
+	ListEvents(ctx context.Context, buildingID int) ([]*domain.ERPEvent, error)
+	ListMaterialStocks(ctx context.Context, buildingID int) ([]*domain.MaterialStock, error)
+	ListProductionSchedules(ctx context.Context, buildingID int) ([]*domain.ProductionSchedule, error)
+}
+
 type dealsByBuildingReader interface {
 	GetDealsByBuildingID(ctx context.Context, buildingID int) ([]*domain.Deal, error)
 }
@@ -99,8 +105,8 @@ type recommendationWriter interface {
 }
 
 type offerWorkflow interface {
-	Calculate(ctx context.Context, dealID, requestedBy int, discountPercent string) (*domain.OfferCalculation, error)
-	Create(ctx context.Context, requestID string, dealID, createdBy int, discountPercent, generatedText string) (*domain.Offer, error)
+	Calculate(ctx context.Context, dealID, requestedBy int, discountPercent string, selections ...domain.OfferSelection) (*domain.OfferCalculation, error)
+	Create(ctx context.Context, requestID string, dealID, createdBy int, discountPercent, generatedText string, selections ...domain.OfferSelection) (*domain.Offer, error)
 	RequestApproval(ctx context.Context, offerID, requestedBy int) (*domain.Offer, error)
 	Get(ctx context.Context, offerID int) (*domain.Offer, error)
 }
@@ -116,6 +122,7 @@ type BackendRPCDispatcher struct {
 	competitors      competitorReader
 	recommendations  recommendationWriter
 	offers           offerWorkflow
+	erp              erpReader
 }
 
 func NewBackendRPCDispatcher(
@@ -129,7 +136,12 @@ func NewBackendRPCDispatcher(
 	competitors competitorReader,
 	recommendations recommendationWriter,
 	offers offerWorkflow,
+	erpReaders ...erpReader,
 ) *BackendRPCDispatcher {
+	var erp erpReader
+	if len(erpReaders) > 0 {
+		erp = erpReaders[0]
+	}
 	return &BackendRPCDispatcher{
 		deals:            deals,
 		clients:          clients,
@@ -141,6 +153,7 @@ func NewBackendRPCDispatcher(
 		competitors:      competitors,
 		recommendations:  recommendations,
 		offers:           offers,
+		erp:              erp,
 	}
 }
 
@@ -193,6 +206,8 @@ type offerCalculatePayload struct {
 	DealID          int         `json:"deal_id"`
 	RequestedBy     int         `json:"requested_by"`
 	DiscountPercent json.Number `json:"discount_percent"`
+	ParkingUnitID   *int        `json:"parking_unit_id,omitempty"`
+	StorageUnitID   *int        `json:"storage_unit_id,omitempty"`
 }
 
 type offerCreatePayload struct {
@@ -200,6 +215,8 @@ type offerCreatePayload struct {
 	CreatedBy       int         `json:"created_by"`
 	DiscountPercent json.Number `json:"discount_percent"`
 	GeneratedText   string      `json:"generated_text"`
+	ParkingUnitID   *int        `json:"parking_unit_id,omitempty"`
+	StorageUnitID   *int        `json:"storage_unit_id,omitempty"`
 }
 
 type offerRequestApprovalPayload struct {
@@ -248,10 +265,12 @@ type apartmentRPCData struct {
 }
 
 type buildingRPCData struct {
-	ID              int     `json:"id"`
-	Name            string  `json:"name,omitempty"`
-	District        string  `json:"district"`
-	PlannedDelivery *string `json:"planned_delivery,omitempty"`
+	ID               int     `json:"id"`
+	Name             string  `json:"name,omitempty"`
+	District         string  `json:"district"`
+	PlannedDelivery  *string `json:"planned_delivery,omitempty"`
+	ForecastDelivery *string `json:"forecast_delivery,omitempty"`
+	ReadinessPercent *int    `json:"readiness_percent,omitempty"`
 }
 
 type competitorListRPCData struct {
@@ -287,6 +306,13 @@ type recommendationCreatedRPCData struct {
 type offerCalculationRPCData struct {
 	DealID             int     `json:"deal_id"`
 	BasePrice          int64   `json:"base_price"`
+	ApartmentPrice     int64   `json:"apartment_price"`
+	ParkingUnitID      *int    `json:"parking_unit_id,omitempty"`
+	ParkingNumber      *string `json:"parking_number,omitempty"`
+	ParkingPrice       int64   `json:"parking_price"`
+	StorageUnitID      *int    `json:"storage_unit_id,omitempty"`
+	StorageNumber      *string `json:"storage_number,omitempty"`
+	StoragePrice       int64   `json:"storage_price"`
 	DiscountPercent    float64 `json:"discount_percent"`
 	DiscountAmount     int64   `json:"discount_amount"`
 	FinalPrice         int64   `json:"final_price"`
@@ -311,6 +337,12 @@ type offerGetRPCData struct {
 	BasePrice        int64              `json:"base_price"`
 	DiscountPercent  float64            `json:"discount_percent"`
 	FinalPrice       int64              `json:"final_price"`
+	ParkingUnitID    *int               `json:"parking_unit_id,omitempty"`
+	ParkingNumber    *string            `json:"parking_number,omitempty"`
+	ParkingPrice     int64              `json:"parking_price"`
+	StorageUnitID    *int               `json:"storage_unit_id,omitempty"`
+	StorageNumber    *string            `json:"storage_number,omitempty"`
+	StoragePrice     int64              `json:"storage_price"`
 	GeneratedText    string             `json:"generated_text"`
 	Status           domain.OfferStatus `json:"status"`
 	ApprovalRequired bool               `json:"approval_required"`
@@ -464,9 +496,15 @@ func (d *BackendRPCDispatcher) Dispatch(
 			value := building.PlannedDate.Format("2006-01-02")
 			plannedDelivery = &value
 		}
+		var forecastDelivery *string
+		if building.ForecastDate != nil {
+			value := building.ForecastDate.Format("2006-01-02")
+			forecastDelivery = &value
+		}
 		return domain.BackendRPCSuccess(request.RequestID, buildingRPCData{
 			ID: payload.BuildingID, Name: complex.Name, District: building.District,
-			PlannedDelivery: plannedDelivery,
+			PlannedDelivery:  plannedDelivery,
+			ForecastDelivery: forecastDelivery, ReadinessPercent: building.ReadinessPercent,
 		})
 
 	case CompetitorListRoutingKey:
@@ -506,6 +544,33 @@ func (d *BackendRPCDispatcher) Dispatch(
 				RiskLevel: *item.RiskLevel, DelayDays: item.DelayDays,
 				CompletionPercentage: item.CompletionPercentage,
 			})
+		}
+		if d.erp != nil {
+			erpEvents, erpErr := d.erp.ListEvents(ctx, payload.BuildingID)
+			if erpErr != nil {
+				return backendReadFailure(request.RequestID, erpErr, nil, "", "")
+			}
+			for _, item := range erpEvents {
+				events = append(events, constructionEventRPCData{Type: item.Kind, Title: item.Title, RiskLevel: item.Severity, DelayDays: item.DelayDays})
+			}
+			stocks, stockErr := d.erp.ListMaterialStocks(ctx, payload.BuildingID)
+			if stockErr != nil {
+				return backendReadFailure(request.RequestID, stockErr, nil, "", "")
+			}
+			for _, item := range stocks {
+				if item.Quantity < item.MinimumQuantity {
+					events = append(events, constructionEventRPCData{Type: "material", Title: "Запас ниже минимального: " + item.MaterialName, RiskLevel: "medium"})
+				}
+			}
+			schedules, scheduleErr := d.erp.ListProductionSchedules(ctx, payload.BuildingID)
+			if scheduleErr != nil {
+				return backendReadFailure(request.RequestID, scheduleErr, nil, "", "")
+			}
+			for _, item := range schedules {
+				if item.Status == "delayed" {
+					events = append(events, constructionEventRPCData{Type: "production", Title: "Задержка производства: " + item.ProductName, RiskLevel: "high"})
+				}
+			}
 		}
 		return domain.BackendRPCSuccess(request.RequestID, constructionEventsRPCData{Events: events})
 
@@ -551,7 +616,10 @@ func (d *BackendRPCDispatcher) Dispatch(
 		if err := decodeStrict(request.Payload, &payload); err != nil || payload.DealID <= 0 || payload.RequestedBy <= 0 || payload.DiscountPercent == "" {
 			return domain.BackendRPCFailure(request.RequestID, "VALIDATION_ERROR", "deal_id, requested_by and discount_percent are required")
 		}
-		calculation, err := d.offers.Calculate(ctx, payload.DealID, payload.RequestedBy, payload.DiscountPercent.String())
+		calculation, err := d.offers.Calculate(ctx, payload.DealID, payload.RequestedBy, payload.DiscountPercent.String(), domain.OfferSelection{
+			ParkingUnitID: payload.ParkingUnitID,
+			StorageUnitID: payload.StorageUnitID,
+		})
 		if err != nil {
 			return offerFailure(request.RequestID, err)
 		}
@@ -562,7 +630,10 @@ func (d *BackendRPCDispatcher) Dispatch(
 		if err := decodeStrict(request.Payload, &payload); err != nil || payload.DealID <= 0 || payload.CreatedBy <= 0 || payload.DiscountPercent == "" || strings.TrimSpace(payload.GeneratedText) == "" {
 			return domain.BackendRPCFailure(request.RequestID, "VALIDATION_ERROR", "deal_id, created_by, discount_percent and generated_text are required")
 		}
-		offer, err := d.offers.Create(ctx, request.RequestID, payload.DealID, payload.CreatedBy, payload.DiscountPercent.String(), payload.GeneratedText)
+		offer, err := d.offers.Create(ctx, request.RequestID, payload.DealID, payload.CreatedBy, payload.DiscountPercent.String(), payload.GeneratedText, domain.OfferSelection{
+			ParkingUnitID: payload.ParkingUnitID,
+			StorageUnitID: payload.StorageUnitID,
+		})
 		if err != nil {
 			return offerFailure(request.RequestID, err)
 		}
@@ -638,6 +709,11 @@ func calculationRPCData(calculation *domain.OfferCalculation) offerCalculationRP
 	maximum, _ := strconv.ParseFloat(calculation.MaxAllowedDiscount, 64)
 	return offerCalculationRPCData{
 		DealID: calculation.DealID, BasePrice: calculation.BasePrice,
+		ApartmentPrice: calculation.ApartmentPrice,
+		ParkingUnitID:  calculation.ParkingUnitID, ParkingNumber: calculation.ParkingNumber,
+		ParkingPrice:  calculation.ParkingPrice,
+		StorageUnitID: calculation.StorageUnitID, StorageNumber: calculation.StorageNumber,
+		StoragePrice:    calculation.StoragePrice,
 		DiscountPercent: discount, DiscountAmount: calculation.DiscountAmount,
 		FinalPrice: calculation.FinalPrice, MaxAllowedDiscount: maximum,
 		RequiresApproval: calculation.RequiresApproval,
@@ -650,6 +726,9 @@ func offerGetData(offer *domain.Offer) offerGetRPCData {
 		ID: offer.ID, DealID: offer.DealID, CreatedBy: offer.CreatedBy,
 		BasePrice: offer.BasePrice, DiscountPercent: discount,
 		FinalPrice: offer.FinalPrice, GeneratedText: offer.GeneratedText,
+		ParkingUnitID: offer.ParkingUnitID, ParkingNumber: offer.ParkingNumber,
+		ParkingPrice: offer.ParkingPrice, StorageUnitID: offer.StorageUnitID,
+		StorageNumber: offer.StorageNumber, StoragePrice: offer.StoragePrice,
 		Status: offer.Status, ApprovalRequired: offer.ApprovalRequired,
 		ApprovedBy: offer.ApprovedBy, ApprovedAt: offer.ApprovedAt,
 		CreatedAt: offer.CreatedAt, UpdatedAt: offer.UpdatedAt,

@@ -23,16 +23,27 @@ func (f *fakeAIService) SendChatRequest(_ context.Context, payload domain.AgentC
 	return f.response, f.err
 }
 
+func (*fakeAIService) AnalyzeDialog(context.Context, int, int) (*domain.DialogAnalyzeResponseData, error) {
+	return nil, nil
+}
+
+func (*fakeAIService) AssistDialogReply(context.Context, int, int, *string) (*domain.DialogReplyAssistResponseData, error) {
+	return nil, nil
+}
+
 func (*fakeAIService) NewRabbitMQChannel() (*amqp.Channel, error) { return nil, nil }
 func (*fakeAIService) Close() error                               { return nil }
 
-type fakeAIChatService struct{}
+type fakeAIChatService struct {
+	sent int
+}
 
 func (*fakeAIChatService) CreateSession(context.Context, domain.CreateChatSessionRequest, *int) (*domain.ChatSession, error) {
 	return nil, nil
 }
 func (*fakeAIChatService) GetSessionByID(context.Context, int) (*domain.ChatSession, error) {
-	return nil, nil
+	employeeID := 1
+	return &domain.ChatSession{ID: 1, EmployeeID: &employeeID}, nil
 }
 func (*fakeAIChatService) GetSessions(context.Context, *int, *int, *domain.ChatSessionStatus) ([]*domain.ChatSession, error) {
 	return nil, nil
@@ -42,7 +53,9 @@ func (*fakeAIChatService) CloseSession(context.Context, int) error     { return 
 func (*fakeAIChatService) RejectSession(context.Context, int, int, string) (*domain.ChatSessionRejection, error) {
 	return nil, nil
 }
-func (*fakeAIChatService) SendMessage(context.Context, int, *int, string, string) (*domain.Message, error) {
+
+func (f *fakeAIChatService) SendMessage(context.Context, int, *int, string, string) (*domain.Message, error) {
+	f.sent++
 	return nil, nil
 }
 func (*fakeAIChatService) GetMessages(context.Context, int, *int) ([]*domain.Message, error) {
@@ -94,5 +107,20 @@ func TestAIChatMapsAgentForbiddenToHTTPForbidden(t *testing.T) {
 
 	if response.Code != http.StatusForbidden || response.Body.String() != "FORBIDDEN\n" {
 		t.Fatalf("unexpected forbidden response: status=%d body=%q", response.Code, response.Body.String())
+	}
+}
+
+func TestAIChatDoesNotWriteStaffAdviceToClientHistory(t *testing.T) {
+	ai := &fakeAIService{response: &domain.AgentChatResponseData{Message: "internal", Agent: "general", Intent: "general"}}
+	chat := &fakeAIChatService{}
+	handler := NewAIHandler(ai, chat)
+	request := httptest.NewRequest(http.MethodPost, "/api/ai/chat", bytes.NewBufferString(`{"message":"help","session_id":1}`))
+	request = request.WithContext(context.WithValue(request.Context(), "user", &domain.User{ID: 1, Role: domain.RoleManager}))
+	response := httptest.NewRecorder()
+
+	handler.Chat(response, request)
+
+	if response.Code != http.StatusOK || chat.sent != 0 {
+		t.Fatalf("staff advice leaked into client history: status=%d writes=%d", response.Code, chat.sent)
 	}
 }

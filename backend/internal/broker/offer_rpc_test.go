@@ -11,6 +11,7 @@ import (
 )
 
 func TestOfferCalculateRPCSuccessAndIntegerIDs(t *testing.T) {
+	parkingID, storageID := 41, 42
 	offers := &fakeOfferWorkflow{calculation: &domain.OfferCalculation{
 		DealID: 10, BasePrice: 14200000, DiscountPercent: "7",
 		DiscountAmount: 994000, FinalPrice: 13206000,
@@ -20,6 +21,7 @@ func TestOfferCalculateRPCSuccessAndIntegerIDs(t *testing.T) {
 	response := dispatcher.Dispatch(context.Background(), OfferCalculateRoutingKey,
 		rpcBody("req_offer_calc", "offer.calculate", map[string]any{
 			"deal_id": 10, "requested_by": 15, "discount_percent": 7,
+			"parking_unit_id": parkingID, "storage_unit_id": storageID,
 		}))
 	data, ok := response.Data.(offerCalculationRPCData)
 	if !response.Success || !ok || data.FinalPrice != 13206000 || !data.RequiresApproval {
@@ -27,6 +29,10 @@ func TestOfferCalculateRPCSuccessAndIntegerIDs(t *testing.T) {
 	}
 	if response.RequestID != "req_offer_calc" || offers.dealID != 10 || offers.userID != 15 || offers.discount != "7" {
 		t.Fatalf("transport or integer IDs changed: %#v", offers)
+	}
+	if offers.selection.ParkingUnitID == nil || *offers.selection.ParkingUnitID != parkingID ||
+		offers.selection.StorageUnitID == nil || *offers.selection.StorageUnitID != storageID {
+		t.Fatalf("ancillary selection was not forwarded: %#v", offers.selection)
 	}
 }
 

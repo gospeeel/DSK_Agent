@@ -167,7 +167,7 @@ func (r *chatRepository) TakeSession(ctx context.Context, sessionID int, employe
 	query := `
 		UPDATE chat_sessions 
 		SET id_employee = $1, status = $2, updated_at = NOW() 
-		WHERE id = $3
+		WHERE id = $3 AND id_employee IS NULL
 	`
 	cmdTag, err := r.db.Exec(ctx, query, employeeID, domain.ChatSessionStatusInProgress, sessionID)
 	if err != nil {

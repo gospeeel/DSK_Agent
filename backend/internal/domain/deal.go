@@ -34,7 +34,6 @@ type CreateDealRequest struct {
 	UserID          int     `json:"id_user"`
 	ApartmentID     int     `json:"id_apartment"`
 	ChatSessionID   *int    `json:"id_chat_session,omitempty"`
-	BasePrice       float64 `json:"base_price"`
 	PercentDiscount float64 `json:"percent_discount"`
 }
 

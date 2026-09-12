@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"backend/internal/domain"
+	"backend/internal/repository"
 	"backend/internal/service"
 	"github.com/go-chi/chi/v5"
 )
@@ -50,6 +52,10 @@ func (h *NotificationHandler) MarkAsRead(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.notificationService.MarkAsRead(r.Context(), id, user.ID); err != nil {
+		if errors.Is(err, repository.ErrNotificationNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

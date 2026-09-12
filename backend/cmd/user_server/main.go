@@ -39,9 +39,17 @@ func main() {
 	userHandler := handler.NewUserHandler(userService, authService)
 
 	dealRepo := repository.NewDealRepository(dbpool)
-	dealService := service.NewDealService(dealRepo)
+	discountPolicyRepo := repository.NewDiscountPolicyRepository(dbpool)
+	dealService := service.NewDealService(dealRepo, cfg.MaxManagerDiscountPercent, cfg.MaxSupervisorDiscountPercent, discountPolicyRepo)
 	dealHandler := handler.NewDealHandler(dealService)
-
+	offerRepo := repository.NewOfferRepository(dbpool)
+	offerService, err := service.NewOfferService(dealRepo, userRepo, offerRepo, cfg.MaxManagerDiscountPercent, cfg.MaxSupervisorDiscountPercent, discountPolicyRepo)
+	if err != nil {
+		log.Fatalf("Invalid offer discount policy: %v\n", err)
+	}
+	offerDeliveryRepo := repository.NewOfferDeliveryRepository(dbpool)
+	offerDeliveryService := service.NewOfferDeliveryService(offerDeliveryRepo, dealRepo, userRepo, service.NewSMTPOfferAttachmentSender(cfg))
+	offerHandler := handler.NewOfferHandler(offerService, offerDeliveryService)
 
 	emailSender := service.NewSMTPEmailSender(cfg)
 	notificationRepo := repository.NewNotificationRepository(dbpool)
@@ -51,14 +59,12 @@ func main() {
 	constructionRepo := repository.NewConstructionRepository(dbpool)
 	constructionService := service.NewConstructionService(constructionRepo, notificationService)
 	constructionHandler := handler.NewConstructionHandler(constructionService)
+	ancillaryUnitRepo := repository.NewAncillaryUnitRepository(dbpool)
+	ancillaryUnitHandler := handler.NewAncillaryUnitHandler(ancillaryUnitRepo)
 
 	chatRepo := repository.NewChatRepository(dbpool)
 	chatService := service.NewChatService(chatRepo)
 	chatHandler := handler.NewChatHandler(chatService)
-
-	aiService := service.NewAIAgentService(cfg.RabbitMQURL)
-	defer aiService.Close()
-	aiHandler := handler.NewAIHandler(aiService, chatService)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -90,13 +96,13 @@ func main() {
 	r.Get("/api/buildings/{id}", constructionHandler.GetBuilding)
 	r.Get("/api/buildings/{buildingId}/apartments", constructionHandler.GetApartmentsByBuilding)
 	r.Get("/api/buildings/{buildingId}/progress", constructionHandler.GetProgressByBuilding)
+	r.Get("/api/buildings/{buildingId}/ancillary-units", ancillaryUnitHandler.List)
 
 	r.Get("/api/apartments/{id}", constructionHandler.GetApartment)
 	r.Get("/api/progress/{id}", constructionHandler.GetProgress)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authHandler.AuthMiddleware)
-		r.Post("/api/ai/chat", aiHandler.Chat)
 		r.Get("/api/auth/profile", authHandler.Profile)
 		r.Get("/api/users/me", userHandler.GetMe)
 		r.Put("/api/users/me", userHandler.UpdateMe)
@@ -115,6 +121,9 @@ func main() {
 		// Client Deals routes
 		r.Get("/api/deals", dealHandler.GetMyDeals)
 		r.Get("/api/deals/{id}", dealHandler.GetDeal)
+		r.Get("/api/offers", offerHandler.List)
+		r.Get("/api/offers/{id}", offerHandler.Get)
+		r.Get("/api/offers/{id}/pdf", offerHandler.PDF)
 	})
 
 	log.Printf("Starting User Server on port %s", port)
@@ -122,4 +131,3 @@ func main() {
 		log.Fatalf("Server error: %v", err)
 	}
 }
-

@@ -17,8 +17,52 @@ type UserRepository interface {
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
 	GetUserByID(ctx context.Context, id int) (*domain.User, error)
 	GetAllUsers(ctx context.Context) ([]*domain.User, error)
+	GetUsersForEmployee(ctx context.Context, employeeID int) ([]*domain.User, error)
+	CanEmployeeAccessUser(ctx context.Context, employeeID, userID int) (bool, error)
 	UpdateUser(ctx context.Context, user *domain.User) error
 	UpdateClientPreferences(ctx context.Context, id int, budgetMax *int64, preferences map[string]any) (*domain.ClientPreferences, error)
+}
+
+func (r *userRepository) GetUsersForEmployee(ctx context.Context, employeeID int) ([]*domain.User, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, name, email, role, budget_max, preferences
+		FROM users u
+		WHERE u.role = 'user' AND (
+			EXISTS (SELECT 1 FROM deals d WHERE d.id_user = u.id AND d.id_employee = $1)
+			OR EXISTS (SELECT 1 FROM chat_sessions cs WHERE cs.id_user = u.id AND cs.id_employee = $1)
+		)
+		ORDER BY name, id
+	`, employeeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	users := make([]*domain.User, 0)
+	for rows.Next() {
+		var user domain.User
+		var rawPreferences []byte
+		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.BudgetMax, &rawPreferences); err != nil {
+			return nil, err
+		}
+		user.Preferences, err = domain.DecodePreferences(rawPreferences)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, &user)
+	}
+	return users, rows.Err()
+}
+
+func (r *userRepository) CanEmployeeAccessUser(ctx context.Context, employeeID, userID int) (bool, error) {
+	var allowed bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM deals WHERE id_user = $2 AND id_employee = $1
+			UNION ALL
+			SELECT 1 FROM chat_sessions WHERE id_user = $2 AND id_employee = $1
+		)
+	`, employeeID, userID).Scan(&allowed)
+	return allowed, err
 }
 
 type userRepository struct {

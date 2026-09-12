@@ -43,7 +43,7 @@ func NewSMTPEmailSender(cfg *config.Config) EmailSender {
 
 func (s *smtpEmailSender) SendEmail(to string, subject string, body string) error {
 	if strings.TrimSpace(s.host) == "" || strings.TrimSpace(s.port) == "" {
-		log.Printf("[SMTP Mock] Host not configured. Would send to %s | Subject: %s | Body: %s", to, subject, body)
+		log.Printf("[SMTP] Delivery skipped: SMTP is not configured")
 		return nil
 	}
 
@@ -68,7 +68,7 @@ func (s *smtpEmailSender) SendEmail(to string, subject string, body string) erro
 		return err
 	}
 
-	log.Printf("[SMTP] Email successfully sent to %s | Subject: %s", to, subject)
+	log.Printf("[SMTP] Email successfully sent")
 	return nil
 }
 
@@ -100,8 +100,21 @@ func (s *notificationService) NotifyConstructionUpdate(ctx context.Context, prog
 
 	isDelay := progress.Status == domain.ProgressStatusDelayed || (progress.DelayDays != nil && *progress.DelayDays > 0)
 	hasRisk := progress.RiskLevel != nil && (*progress.RiskLevel == "medium" || *progress.RiskLevel == "high")
+	riskLevel := ""
+	if progress.RiskLevel != nil {
+		riskLevel = *progress.RiskLevel
+	}
+	delayDays := 0
+	if progress.DelayDays != nil {
+		delayDays = *progress.DelayDays
+	}
+	fingerprint := fmt.Sprintf("%s|%s|%d|%s", progress.Status, riskLevel, delayDays, strings.TrimSpace(progress.DelayReason))
+	changed, err := s.notificationRepo.ClaimConstructionState(ctx, progress.ID, fingerprint)
+	if err != nil {
+		return err
+	}
 
-	if !isDelay && !hasRisk {
+	if !changed || (!isDelay && !hasRisk) {
 		return nil
 	}
 
@@ -150,18 +163,20 @@ func (s *notificationService) NotifyConstructionUpdate(ctx context.Context, prog
 			Message: message,
 			IsRead:  false,
 		}
-		if _, err := s.notificationRepo.CreateNotification(ctx, notif); err != nil {
+		created, err := s.notificationRepo.CreateNotification(ctx, notif)
+		if err != nil {
 			log.Printf("[Notification] Failed to create in-app notification for user %d: %v", deal.UserID, err)
+			continue
 		}
 
 		// 2. Отправляем email клиенту
 		user, err := s.userRepo.GetUserByID(ctx, deal.UserID)
-		if err == nil && user != nil && user.Email != "" {
+		if created != nil && err == nil && user != nil && user.Email != "" {
 			emailSubject := title
 			emailBody := fmt.Sprintf("Здравствуйте, %s!\n\n%s\n\nС уважением,\nКоманда застройщика", user.Name, message)
-			go func(to, subj, body string) {
-				_ = s.emailSender.SendEmail(to, subj, body)
-			}(user.Email, emailSubject, emailBody)
+			if err := s.emailSender.SendEmail(user.Email, emailSubject, emailBody); err != nil {
+				log.Printf("[Notification] Email delivery failed for user %d: %v", deal.UserID, err)
+			}
 		}
 	}
 

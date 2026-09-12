@@ -63,8 +63,11 @@ ANALYTICS_SYSTEM_PROMPT = """Ты аналитический помощник м
 - ЗАПРЕЩЕНО придумывать задержки, даты, причины событий и risk level.
 - completion_percentage — фактическая готовность этапа. Упоминай её только если
   поле присутствует; если оно null, не придумывай процент готовности.
-- Если building.planned_delivery присутствует, обязательно назови эту дату точно.
-  Если поле null, не придумывай плановую дату сдачи.
+- Называй точную дату сдачи только когда exact_delivery_date_allowed=true — это
+  «зелёная зона», без зафиксированных средних/высоких рисков и задержек.
+- Если exact_delivery_date_allowed=false, не обещай и не называй точную дату:
+  сообщи, что срок требует уточнения из-за зарегистрированного риска.
+- Если building.planned_delivery=null, не придумывай плановую дату сдачи.
 - ЗАПРЕЩЕНО утверждать влияние на срок сдачи без фактических оснований в context.
 - Не выполняй финансовые расчёты и не добавляй сведения из внешних источников.
 - Если данных недостаточно, явно скажи об этом менеджеру.
@@ -232,11 +235,19 @@ class AnalyticsAgent:
             )
             return BACKEND_DATA_ERROR_RESPONSE
 
+        exact_delivery_date_allowed = building.planned_delivery is not None and all(
+            event.risk_level == "low" and not event.delay_days
+            for event in events.events
+        )
+        safe_building = building if exact_delivery_date_allowed else building.model_copy(
+            update={"planned_delivery": None, "forecast_delivery": None}
+        )
         context = AnalyticsContext(
             deal=deal,
             apartment=apartment,
-            building=building,
+            building=safe_building,
             construction_events=events.events,
+            exact_delivery_date_allowed=exact_delivery_date_allowed,
         )
 
         user_prompt = (

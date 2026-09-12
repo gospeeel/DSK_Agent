@@ -167,6 +167,55 @@ async def test_create_offer_uses_factual_backend_workflow() -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_offer_preserves_selected_parking_and_storage() -> None:
+    llm, deal_tools, client_tools, apartment_tools, offer_tools = make_dependencies()
+    offer_tools.calculate_offer.return_value = backend_response(
+        {
+            **calculation_data(),
+            "base_price": 15_930_000,
+            "apartment_price": 14_200_000,
+            "parking_unit_id": 41,
+            "parking_number": "P-041",
+            "parking_price": 1_250_000,
+            "storage_unit_id": 42,
+            "storage_number": "K-018",
+            "storage_price": 480_000,
+            "discount_amount": 477_900,
+            "final_price": 15_452_100,
+        }
+    )
+    agent = OfferAgent(llm, deal_tools, client_tools, apartment_tools, offer_tools)
+
+    result = await agent.generate(
+        "Сформируй КП",
+        "create_offer",
+        DEAL_ID,
+        USER_ID,
+        parking_unit_id=41,
+        storage_unit_id=42,
+    )
+
+    offer_tools.calculate_offer.assert_awaited_once_with(
+        DEAL_ID,
+        USER_ID,
+        0,
+        parking_unit_id=41,
+        storage_unit_id=42,
+    )
+    offer_tools.create_offer.assert_awaited_once_with(
+        DEAL_ID,
+        USER_ID,
+        3.0,
+        "Персональный текст КП",
+        parking_unit_id=41,
+        storage_unit_id=42,
+    )
+    assert "Парковка P-041: 1 250 000 ₽" in result
+    assert "Кладовая K-018: 480 000 ₽" in result
+    assert "Стоимость до скидки: 15 930 000 ₽" in result
+
+
+@pytest.mark.asyncio
 async def test_requires_approval_creates_offer_and_requests_approval() -> None:
     llm, deal_tools, client_tools, apartment_tools, offer_tools = make_dependencies()
     offer_tools.calculate_offer.return_value = backend_response(

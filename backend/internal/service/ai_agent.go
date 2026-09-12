@@ -46,6 +46,8 @@ func generateSimpleID(prefix string) string {
 
 type AIAgentService interface {
 	SendChatRequest(ctx context.Context, payload domain.AgentChatPayload) (*domain.AgentChatResponseData, error)
+	AnalyzeDialog(ctx context.Context, dealID, userID int) (*domain.DialogAnalyzeResponseData, error)
+	AssistDialogReply(ctx context.Context, dealID, userID int, selectedText *string) (*domain.DialogReplyAssistResponseData, error)
 	NewRabbitMQChannel() (*amqp.Channel, error)
 	Close() error
 }
@@ -105,23 +107,62 @@ func (s *aiAgentService) ensureConnection() (*amqp.Channel, error) {
 }
 
 func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.AgentChatPayload) (*domain.AgentChatResponseData, error) {
+	var response domain.AgentChatResponseData
+	if err := s.sendRPC(ctx, "agent.chat.request", "chat", payload, &response); err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func (s *aiAgentService) AnalyzeDialog(ctx context.Context, dealID, userID int) (*domain.DialogAnalyzeResponseData, error) {
+	var response domain.DialogAnalyzeResponseData
+	payload := map[string]any{"deal_id": dealID, "user_id": userID}
+	if err := s.sendRPC(ctx, "agent.dialog.analyze", "dialog.analyze", payload, &response); err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func (s *aiAgentService) AssistDialogReply(ctx context.Context, dealID, userID int, selectedText *string) (*domain.DialogReplyAssistResponseData, error) {
+	var response domain.DialogReplyAssistResponseData
+	payload := map[string]any{"deal_id": dealID, "user_id": userID, "selected_text": selectedText}
+	if err := s.sendRPC(ctx, "agent.dialog.reply_assist", "dialog.reply_assist", payload, &response); err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+type agentRPCEnvelope struct {
+	RequestID string `json:"request_id"`
+	Action    string `json:"action"`
+	Payload   any    `json:"payload"`
+}
+
+type agentRPCResponse struct {
+	RequestID string                 `json:"request_id"`
+	Success   bool                   `json:"success"`
+	Data      json.RawMessage        `json:"data"`
+	Error     *domain.AgentChatError `json:"error"`
+}
+
+func (s *aiAgentService) sendRPC(ctx context.Context, routingKey, action string, payload, output any) error {
 	ch, err := s.ensureConnection()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	requestID := generateSimpleID("req")
 	correlationID := generateSimpleID("corr")
 
-	reqEnvelope := domain.AgentChatRequestEnvelope{
+	reqEnvelope := agentRPCEnvelope{
 		RequestID: requestID,
-		Action:    "chat",
+		Action:    action,
 		Payload:   payload,
 	}
 
 	body, err := json.Marshal(reqEnvelope)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %v", err)
+		return fmt.Errorf("failed to marshal request: %v", err)
 	}
 
 	// Create temporary exclusive callback queue for this RPC
@@ -134,7 +175,7 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 		nil,   // arguments
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to declare callback queue: %v", err)
+		return fmt.Errorf("failed to declare callback queue: %v", err)
 	}
 	defer func() {
 		_, _ = ch.QueueDelete(q.Name, false, false, false)
@@ -150,16 +191,16 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 		nil,    // args
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to register consumer: %v", err)
+		return fmt.Errorf("failed to register consumer: %v", err)
 	}
 
 	// Publish to exchange app.topic with routing key agent.chat.request
 	err = ch.PublishWithContext(
 		ctx,
-		"app.topic",          // exchange
-		"agent.chat.request", // routing key
-		false,                // mandatory
-		false,                // immediate
+		"app.topic", // exchange
+		routingKey,  // routing key
+		false,       // mandatory
+		false,       // immediate
 		amqp.Publishing{
 			ContentType:   "application/json",
 			CorrelationId: correlationID,
@@ -168,7 +209,7 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to publish message: %v", err)
+		return fmt.Errorf("failed to publish message: %v", err)
 	}
 
 	// Wait for response or timeout
@@ -179,12 +220,12 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		case <-timer.C:
-			return nil, ErrRPCResponseTimeout
+			return ErrRPCResponseTimeout
 		case d, ok := <-msgs:
 			if !ok {
-				return nil, errors.New("callback queue channel closed")
+				return errors.New("callback queue channel closed")
 			}
 
 			// Validate correlation_id
@@ -192,31 +233,33 @@ func (s *aiAgentService) SendChatRequest(ctx context.Context, payload domain.Age
 				continue // not our message
 			}
 
-			var respEnvelope domain.AgentChatResponseEnvelope
+			var respEnvelope agentRPCResponse
 			if err := json.Unmarshal(d.Body, &respEnvelope); err != nil {
-				return nil, fmt.Errorf("failed to parse agent response: %v", err)
+				return fmt.Errorf("failed to parse agent response: %v", err)
 			}
 
 			// Validate request_id
 			if respEnvelope.RequestID != requestID {
-				return nil, fmt.Errorf("request_id mismatch: expected %s, got %s", requestID, respEnvelope.RequestID)
+				return fmt.Errorf("request_id mismatch: expected %s, got %s", requestID, respEnvelope.RequestID)
 			}
 
 			if !respEnvelope.Success {
 				if respEnvelope.Error == nil {
-					return nil, ErrRPCFailed
+					return ErrRPCFailed
 				}
-				return nil, &AgentRPCError{
+				return &AgentRPCError{
 					Code:    respEnvelope.Error.Code,
 					Message: respEnvelope.Error.Message,
 				}
 			}
 
-			if respEnvelope.Data == nil {
-				return nil, errors.New("agent response data is empty")
+			if len(respEnvelope.Data) == 0 || string(respEnvelope.Data) == "null" {
+				return errors.New("agent response data is empty")
 			}
-
-			return respEnvelope.Data, nil
+			if err := json.Unmarshal(respEnvelope.Data, output); err != nil {
+				return fmt.Errorf("failed to parse agent response data: %v", err)
+			}
+			return nil
 		}
 	}
 }

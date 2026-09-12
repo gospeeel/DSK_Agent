@@ -15,15 +15,13 @@ func updateUserSpec(raw []byte) []byte {
 	installSharedSchemas(doc)
 	paths := object(doc, "paths")
 
-	ai := operation(paths, "/api/ai/chat", "post")
-	ai["security"] = bearerSecurity()
-	ai["requestBody"] = requestBody("AIChatRequest")
-	ai["responses"] = responses(map[string]string{
-		"200": "AIChatResponse", "400": "", "401": "", "403": "", "500": "", "503": "", "504": "",
-	})
+	delete(paths, "/api/ai/chat")
 
 	paths["/api/notifications"] = openAPIObject{
 		"get": securedListOperation("Notifications", "Получить уведомления пользователя", "Notification"),
+	}
+	operation(paths, "/api/notifications", "get")["parameters"] = []any{
+		openAPIObject{"name": "unread", "in": "query", "required": false, "schema": openAPIObject{"type": "boolean"}},
 	}
 	paths["/api/notifications/read-all"] = openAPIObject{
 		"put": openAPIObject{
@@ -44,14 +42,21 @@ func updateUserSpec(raw []byte) []byte {
 	}
 	// This catalog route is public in user-server.
 	delete(operation(paths, "/api/progress/{id}", "get"), "security")
+	installOfferReadRoutes(paths)
+	paths["/api/buildings/{buildingId}/ancillary-units"] = openAPIObject{
+		"get": securedListOperationWithParameter("Catalog", "Получить парковки и кладовые корпуса", "AncillaryUnit", "buildingId"),
+	}
+	delete(operation(paths, "/api/buildings/{buildingId}/ancillary-units", "get"), "security")
 	return encodeSpec(doc)
 }
-
 
 func updateStaffSpec(raw []byte) []byte {
 	doc := decodeSpec(raw)
 	installSharedSchemas(doc)
 	paths := object(doc, "paths")
+	staffRegister := operation(paths, "/api/auth/register", "post")
+	staffRegister["summary"] = "Создать сотрудника (только руководитель)"
+	staffRegister["security"] = bearerSecurity()
 
 	paths["/api/auth/logout"] = openAPIObject{
 		"post": openAPIObject{"tags": []string{"Auth"}, "summary": "Выход из системы", "responses": responses(map[string]string{"200": ""})},
@@ -68,7 +73,79 @@ func updateStaffSpec(raw []byte) []byte {
 	})
 
 	installStaffConstructionRoutes(paths)
+	installStaffSalesRoutes(paths)
 	return encodeSpec(doc)
+}
+
+func installOfferReadRoutes(paths openAPIObject) {
+	paths["/api/offers"] = openAPIObject{
+		"get": securedListOperation("Offers", "Получить доступные коммерческие предложения", "Offer"),
+	}
+	paths["/api/offers/{id}"] = openAPIObject{
+		"get": securedReadOperation("Offers", "Получить коммерческое предложение", "Offer"),
+	}
+	paths["/api/offers/{id}/pdf"] = openAPIObject{
+		"get": securedReadOperation("Offers", "Скачать утверждённое КП в PDF", ""),
+	}
+}
+
+func installStaffSalesRoutes(paths openAPIObject) {
+	installOfferReadRoutes(paths)
+	paths["/api/offers/calculate"] = openAPIObject{
+		"post": securedWriteOperation("Offers", "Рассчитать КП по финансовой модели", "OfferCalculateRequest", "OfferCalculation", "200"),
+	}
+	paths["/api/offers"].(openAPIObject)["post"] = securedWriteOperation("Offers", "Создать версию КП", "OfferCreateRequest", "Offer", "201")
+	for _, action := range []string{"approval-request", "approve", "reject"} {
+		requestSchema := ""
+		if action == "reject" {
+			requestSchema = "OfferRejectRequest"
+		}
+		op := securedWriteOperation("Offers", "Изменить состояние согласования КП", requestSchema, "Offer", "200")
+		op["parameters"] = []any{idParameter("id")}
+		paths["/api/offers/{id}/"+action] = openAPIObject{"post": op}
+	}
+	paths["/api/offers/{id}/send"] = openAPIObject{
+		"post": securedWriteOperation("Offers", "Отправить утверждённое КП клиенту и сохранить результат доставки", "", "OfferDelivery", "200"),
+	}
+	paths["/api/ai/dialog/analyze"] = openAPIObject{
+		"post": securedWriteOperation("AI", "Извлечь подтверждённые факты из переписки", "DealAIRequest", "DialogAnalysis", "200"),
+	}
+	paths["/api/ai/dialog/reply-assist"] = openAPIObject{
+		"post": securedWriteOperation("AI", "Подготовить приватный черновик ответа менеджеру", "ReplyAssistRequest", "ReplyAssist", "200"),
+	}
+	paths["/api/competitors"] = openAPIObject{
+		"get":  securedListOperation("Competitors", "Получить наблюдения по конкурентам", "Competitor"),
+		"post": securedWriteOperation("Competitors", "Добавить наблюдение", "CompetitorWrite", "Competitor", "201"),
+	}
+	paths["/api/competitors/{id}"] = openAPIObject{
+		"put": securedWriteOperation("Competitors", "Обновить наблюдение", "CompetitorWrite", "Competitor", "200"),
+	}
+	paths["/api/buildings/{buildingId}/discount-policies"] = openAPIObject{
+		"get": securedListOperationWithParameter("Discounts", "Получить версии матрицы скидок корпуса", "DiscountPolicy", "buildingId"),
+	}
+	paths["/api/discount-policies"] = openAPIObject{
+		"post": securedWriteOperation("Discounts", "Создать новую версию лимита скидки", "DiscountPolicyWrite", "DiscountPolicy", "201"),
+	}
+	paths["/api/buildings/{buildingId}/ancillary-units"] = openAPIObject{
+		"get": securedListOperationWithParameter("Catalog", "Получить парковки и кладовые корпуса", "AncillaryUnit", "buildingId"),
+	}
+	paths["/api/ancillary-units"] = openAPIObject{
+		"post": securedWriteOperation("Catalog", "Добавить парковку или кладовую", "AncillaryUnitWrite", "AncillaryUnit", "201"),
+	}
+	paths["/api/ancillary-units/{id}"] = openAPIObject{
+		"put": securedWriteOperation("Catalog", "Обновить парковку или кладовую", "AncillaryUnitWrite", "AncillaryUnit", "200"),
+	}
+	erpRead := securedReadOperation("ERP", "Получить производственную сводку корпуса", "ERPSnapshot")
+	erpRead["parameters"] = []any{idParameter("buildingId")}
+	paths["/api/buildings/{buildingId}/erp"] = openAPIObject{"get": erpRead}
+	paths["/api/erp/events"] = openAPIObject{"post": securedWriteOperation("ERP", "Добавить производственное событие", "ERPEventWrite", "ERPEvent", "201")}
+	paths["/api/erp/material-stocks"] = openAPIObject{"post": securedWriteOperation("ERP", "Сохранить остаток материала", "MaterialStockWrite", "MaterialStock", "200")}
+	paths["/api/erp/production-schedules"] = openAPIObject{"post": securedWriteOperation("ERP", "Добавить производственную задачу", "ProductionScheduleWrite", "ProductionSchedule", "201")}
+	paths["/api/reminders"] = openAPIObject{
+		"get":  securedListOperation("Reminders", "Получить напоминания сотрудника или отдела", "StaffReminder"),
+		"post": securedWriteOperation("Reminders", "Создать напоминание", "StaffReminderWrite", "StaffReminder", "201"),
+	}
+	paths["/api/reminders/{id}/complete"] = openAPIObject{"put": securedWriteOperation("Reminders", "Отметить напоминание выполненным", "", "StaffReminder", "200")}
 }
 
 func installStaffConstructionRoutes(paths openAPIObject) {
@@ -125,13 +202,14 @@ func sharedSchemas() openAPIObject {
 	return openAPIObject{
 		"AIChatRequest": schema([]string{"message", "session_id"}, openAPIObject{
 			"message": openAPIObject{"type": "string"}, "session_id": integer(false), "deal_id": integer(true),
+			"parking_unit_id": integer(true), "storage_unit_id": integer(true),
 		}),
 		"AIChatResponse": schema([]string{"message", "agent", "intent"}, openAPIObject{
 			"message": openAPIObject{"type": "string"}, "agent": openAPIObject{"type": "string"}, "intent": openAPIObject{"type": "string"},
 		}),
-		"CreateDealRequest": schema([]string{"id_user", "id_apartment", "base_price", "percent_discount"}, openAPIObject{
+		"CreateDealRequest": schema([]string{"id_user", "id_apartment", "percent_discount"}, openAPIObject{
 			"id_user": integer(false), "id_apartment": integer(false), "id_chat_session": integer(true),
-			"base_price": openAPIObject{"type": "number"}, "percent_discount": openAPIObject{"type": "number"},
+			"percent_discount": openAPIObject{"type": "number"},
 		}),
 		"User": schema([]string{"id", "name", "email", "role"}, openAPIObject{
 			"id": integer(false), "name": openAPIObject{"type": "string"}, "email": openAPIObject{"type": "string", "format": "email"},
@@ -178,15 +256,45 @@ func sharedSchemas() openAPIObject {
 			"status": enum("not_started", "in_progress", "completed", "delayed"), "completion_percentage": integer(true),
 			"delay_reason": openAPIObject{"type": "string"}, "risk_level": openAPIObject{"type": "string", "nullable": true}, "delay_days": integer(true),
 		}),
+		"Offer": schema([]string{"id", "deal_id", "version", "base_price", "discount_percent", "final_price", "status"}, openAPIObject{
+			"id": integer(false), "deal_id": integer(false), "version": integer(false), "created_by": integer(false), "base_price": integer(false),
+			"discount_percent": openAPIObject{"type": "string"}, "final_price": integer(false), "generated_text": openAPIObject{"type": "string"},
+			"parking_unit_id": integer(true), "parking_number": openAPIObject{"type": "string", "nullable": true}, "parking_price": integer(false),
+			"storage_unit_id": integer(true), "storage_number": openAPIObject{"type": "string", "nullable": true}, "storage_price": integer(false),
+			"status": enum("draft", "pending_approval", "approved", "rejected"), "approval_required": openAPIObject{"type": "boolean"},
+		}),
+		"OfferCalculateRequest":   schema([]string{"deal_id", "discount_percent"}, openAPIObject{"deal_id": integer(false), "discount_percent": openAPIObject{"type": "string"}, "parking_unit_id": integer(true), "storage_unit_id": integer(true)}),
+		"OfferCreateRequest":      schema([]string{"request_id", "deal_id", "discount_percent", "generated_text"}, openAPIObject{"request_id": openAPIObject{"type": "string"}, "deal_id": integer(false), "discount_percent": openAPIObject{"type": "string"}, "generated_text": openAPIObject{"type": "string"}, "parking_unit_id": integer(true), "storage_unit_id": integer(true)}),
+		"OfferCalculation":        schema([]string{"deal_id", "base_price", "apartment_price", "final_price", "max_allowed_discount", "requires_approval"}, openAPIObject{"deal_id": integer(false), "base_price": integer(false), "apartment_price": integer(false), "parking_unit_id": integer(true), "parking_number": openAPIObject{"type": "string", "nullable": true}, "parking_price": integer(false), "storage_unit_id": integer(true), "storage_number": openAPIObject{"type": "string", "nullable": true}, "storage_price": integer(false), "final_price": integer(false), "max_allowed_discount": openAPIObject{"type": "string"}, "requires_approval": openAPIObject{"type": "boolean"}}),
+		"OfferRejectRequest":      schema([]string{"reason"}, openAPIObject{"reason": openAPIObject{"type": "string"}}),
+		"DealAIRequest":           schema([]string{"deal_id"}, openAPIObject{"deal_id": integer(false)}),
+		"ReplyAssistRequest":      schema([]string{"deal_id"}, openAPIObject{"deal_id": integer(false), "selected_text": openAPIObject{"type": "string", "nullable": true}}),
+		"DialogAnalysis":          schema([]string{"deal_id", "client_id", "analysis"}, openAPIObject{"deal_id": integer(false), "client_id": integer(false), "analysis": openAPIObject{"type": "object", "additionalProperties": true}}),
+		"ReplyAssist":             schema([]string{"deal_id", "suggested_reply"}, openAPIObject{"deal_id": integer(false), "suggested_reply": openAPIObject{"type": "string"}}),
+		"Competitor":              schema([]string{"id", "project_name", "district"}, openAPIObject{"id": integer(false), "project_name": openAPIObject{"type": "string"}, "district": openAPIObject{"type": "string"}, "price_per_sqm": integer(true), "source_url": openAPIObject{"type": "string", "nullable": true}, "observed_at": date()}),
+		"CompetitorWrite":         schema([]string{"project_name", "district"}, openAPIObject{"project_name": openAPIObject{"type": "string"}, "district": openAPIObject{"type": "string"}, "price_per_sqm": integer(true), "source_url": openAPIObject{"type": "string", "nullable": true}, "observed_at": date()}),
+		"DiscountPolicy":          schema([]string{"id", "building_id", "role", "max_discount_percent", "version", "valid_from"}, openAPIObject{"id": integer(false), "building_id": integer(false), "role": enum("manager", "supervisor"), "max_discount_percent": openAPIObject{"type": "string"}, "version": integer(false), "valid_from": date(), "valid_to": date()}),
+		"DiscountPolicyWrite":     schema([]string{"building_id", "role", "max_discount_percent", "valid_from"}, openAPIObject{"building_id": integer(false), "role": enum("manager", "supervisor"), "max_discount_percent": openAPIObject{"type": "string"}, "valid_from": date()}),
+		"AncillaryUnit":           schema([]string{"id", "building_id", "kind", "number", "price", "status"}, openAPIObject{"id": integer(false), "building_id": integer(false), "kind": enum("parking", "storage"), "number": openAPIObject{"type": "string"}, "area": openAPIObject{"type": "number", "nullable": true}, "price": integer(false), "status": enum("free", "booked", "sold")}),
+		"AncillaryUnitWrite":      schema([]string{"building_id", "kind", "number", "price", "status"}, openAPIObject{"building_id": integer(false), "kind": enum("parking", "storage"), "number": openAPIObject{"type": "string"}, "area": openAPIObject{"type": "number", "nullable": true}, "price": integer(false), "status": enum("free", "booked", "sold")}),
+		"OfferDelivery":           schema([]string{"id", "offer_id", "recipient", "channel", "status"}, openAPIObject{"id": integer(false), "offer_id": integer(false), "recipient": openAPIObject{"type": "string"}, "channel": enum("email"), "status": enum("pending", "sent", "failed"), "error_message": openAPIObject{"type": "string", "nullable": true}}),
+		"ERPEvent":                schema([]string{"id", "building_id", "kind", "title", "severity"}, openAPIObject{"id": integer(false), "building_id": integer(false), "kind": enum("schedule", "supply", "material", "project_change"), "title": openAPIObject{"type": "string"}, "details": openAPIObject{"type": "string"}, "severity": enum("low", "medium", "high"), "affects_delivery": openAPIObject{"type": "boolean"}, "delay_days": integer(true)}),
+		"ERPEventWrite":           schema([]string{"building_id", "kind", "title", "details", "severity"}, openAPIObject{"building_id": integer(false), "kind": enum("schedule", "supply", "material", "project_change"), "title": openAPIObject{"type": "string"}, "details": openAPIObject{"type": "string"}, "severity": enum("low", "medium", "high"), "affects_delivery": openAPIObject{"type": "boolean"}, "delay_days": integer(true)}),
+		"MaterialStock":           schema([]string{"id", "building_id", "material_name", "quantity", "unit", "minimum_quantity"}, openAPIObject{"id": integer(false), "building_id": integer(false), "material_name": openAPIObject{"type": "string"}, "quantity": openAPIObject{"type": "number"}, "unit": openAPIObject{"type": "string"}, "minimum_quantity": openAPIObject{"type": "number"}}),
+		"MaterialStockWrite":      schema([]string{"building_id", "material_name", "quantity", "unit", "minimum_quantity"}, openAPIObject{"building_id": integer(false), "material_name": openAPIObject{"type": "string"}, "quantity": openAPIObject{"type": "number"}, "unit": openAPIObject{"type": "string"}, "minimum_quantity": openAPIObject{"type": "number"}}),
+		"ProductionSchedule":      schema([]string{"id", "building_id", "product_name", "planned_quantity", "produced_quantity", "planned_date", "status"}, openAPIObject{"id": integer(false), "building_id": integer(false), "product_name": openAPIObject{"type": "string"}, "planned_quantity": integer(false), "produced_quantity": integer(false), "planned_date": date(), "status": enum("planned", "in_progress", "completed", "delayed")}),
+		"ProductionScheduleWrite": schema([]string{"building_id", "product_name", "planned_quantity", "produced_quantity", "planned_date", "status"}, openAPIObject{"building_id": integer(false), "product_name": openAPIObject{"type": "string"}, "planned_quantity": integer(false), "produced_quantity": integer(false), "planned_date": date(), "status": enum("planned", "in_progress", "completed", "delayed")}),
+		"ERPSnapshot":             schema([]string{"events", "material_stocks", "production_schedules"}, openAPIObject{"events": openAPIObject{"type": "array", "items": ref("ERPEvent")}, "material_stocks": openAPIObject{"type": "array", "items": ref("MaterialStock")}, "production_schedules": openAPIObject{"type": "array", "items": ref("ProductionSchedule")}}),
+		"StaffReminder":           schema([]string{"id", "assigned_to", "created_by", "title", "due_at"}, openAPIObject{"id": integer(false), "assigned_to": integer(false), "created_by": integer(false), "deal_id": integer(true), "title": openAPIObject{"type": "string"}, "due_at": date(), "completed_at": date()}),
+		"StaffReminderWrite":      schema([]string{"assigned_to", "title", "due_at"}, openAPIObject{"assigned_to": integer(false), "deal_id": integer(true), "title": openAPIObject{"type": "string"}, "due_at": date()}),
 		"Notification": schema([]string{"id", "user_id", "type", "title", "message", "is_read", "created_at"}, openAPIObject{
 			"id": integer(false), "user_id": integer(false), "deal_id": integer(true),
-			"type": enum("construction_delay", "construction_risk", "deal_update", "general"),
+			"type":  enum("construction_delay", "construction_risk", "deal_update", "general"),
 			"title": openAPIObject{"type": "string"}, "message": openAPIObject{"type": "string"},
 			"is_read": openAPIObject{"type": "boolean"}, "created_at": date(), "read_at": date(),
 		}),
 	}
 }
-
 
 func schema(required []string, properties openAPIObject) openAPIObject {
 	result := openAPIObject{"type": "object", "properties": properties}
@@ -198,11 +306,11 @@ func schema(required []string, properties openAPIObject) openAPIObject {
 
 func crudItemOperations(noun, requestSchema, responseSchema string) openAPIObject {
 	update := securedWriteOperation("Construction", "Обновить "+noun, requestSchema, responseSchema, "200")
+	update["description"] = "Доступно только руководителю отдела продаж"
 	update["parameters"] = []any{idParameter("id")}
 	return openAPIObject{
-		"get":    securedReadOperation("Construction", "Получить "+noun, responseSchema),
-		"put":    update,
-		"delete": securedDeleteOperation("Construction", "Удалить "+noun),
+		"get": securedReadOperation("Construction", "Получить "+noun, responseSchema),
+		"put": update,
 	}
 }
 
@@ -227,10 +335,14 @@ func securedListOperationWithParameter(tag, summary, itemSchema, parameter strin
 }
 
 func securedWriteOperation(tag, summary, requestSchema, responseSchema, successCode string) openAPIObject {
-	return openAPIObject{
-		"tags": []string{tag}, "summary": summary, "security": bearerSecurity(), "requestBody": requestBody(requestSchema),
+	result := openAPIObject{
+		"tags": []string{tag}, "summary": summary, "security": bearerSecurity(),
 		"responses": responses(map[string]string{successCode: responseSchema, "400": "", "401": "", "403": "", "500": ""}),
 	}
+	if requestSchema != "" {
+		result["requestBody"] = requestBody(requestSchema)
+	}
+	return result
 }
 
 func securedDeleteOperation(tag, summary string) openAPIObject {

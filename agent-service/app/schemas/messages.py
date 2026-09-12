@@ -11,6 +11,8 @@ class ChatPayload(BaseModel):
     user_id: BusinessId
     session_id: BusinessId
     deal_id: BusinessId | None = None
+    parking_unit_id: BusinessId | None = None
+    storage_unit_id: BusinessId | None = None
     message: str = Field(min_length=1)
 
 

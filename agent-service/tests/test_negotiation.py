@@ -90,6 +90,12 @@ def make_dependencies() -> tuple[Mock, Mock, Mock, Mock, Mock]:
     return llm, deal_tools, apartment_tools, building_tools, competitor_tools
 
 
+def test_negotiation_prompt_blocks_exact_delivery_without_green_zone() -> None:
+    prompt = NEGOTIATION_SYSTEM_PROMPT.lower()
+    assert "точную дату" in prompt
+    assert "зелёной зоны" in prompt
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("intent", ["handle_objection", "compare_competitor"])
 async def test_negotiation_workflow_uses_factual_backend_context(intent: str) -> None:
