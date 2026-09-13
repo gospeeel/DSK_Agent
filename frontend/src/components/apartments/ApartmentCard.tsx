@@ -1,116 +1,104 @@
 import React from 'react';
-import { Building, MapPin, Layers, Sparkles, MessageCircle, ArrowRight } from 'lucide-react';
+import { MapPin, Building2, MessageSquare } from 'lucide-react';
 import { Apartment } from '../../types';
-import { formatPrice, formatArea, getRoomsLabel, getFinishingLabel, getApartmentStatusBadge } from '../../lib/utils';
+import { formatPrice, formatArea, getRoomsLabel, getApartmentStatusBadge } from '../../lib/utils';
 
 interface ApartmentCardProps {
   apartment: Apartment;
+  existingSessionId?: number;
   onSelect: (apt: Apartment) => void;
-  onContact: (apt: Apartment) => void;
+  onContact?: (apt: Apartment) => void;
+  onGoToChat?: (sessionId: number) => void;
 }
 
-export const ApartmentCard: React.FC<ApartmentCardProps> = ({ apartment, onSelect, onContact }) => {
+export const ApartmentCard: React.FC<ApartmentCardProps> = ({
+  apartment,
+  existingSessionId,
+  onSelect,
+  onContact,
+  onGoToChat,
+}) => {
   const statusBadge = getApartmentStatusBadge(apartment.status);
   const pricePerSqm = apartment.area > 0 ? Math.round(apartment.price / apartment.area) : 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-soft overflow-hidden flex flex-col card-hover">
-      
-      {/* Header section with badge */}
-      <div className="p-5 pb-3">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-dsk-600">
-              {apartment.complex?.name || 'Жилой комплекс'}
-            </span>
-            <h3 className="text-lg font-bold text-slate-900 leading-snug">
+    <div
+      onClick={() => onSelect(apartment)}
+      className="bg-white border-2 border-zinc-900 rounded-2xl p-4 sm:p-5 hover:border-black transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs hover:bg-[#FAF8F2]/40"
+    >
+      {/* Left: Rooms & Apartment Badge + Info */}
+      <div className="flex items-start gap-4 flex-1 min-w-0">
+        <div className="w-14 h-14 rounded-2xl bg-[#FAF8F2] flex flex-col items-center justify-center flex-shrink-0 text-zinc-900 border-2 border-zinc-900">
+          <span className="text-base font-extrabold leading-none">№{apartment.number}</span>
+          <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider mt-0.5">кв.</span>
+        </div>
+
+        <div className="space-y-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-extrabold text-zinc-900 leading-tight">
               {getRoomsLabel(apartment.rooms)}, {formatArea(apartment.area)}
             </h3>
+            <span className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full border-2 ${
+              apartment.status === 'free'
+                ? 'bg-[#EBF7EE] text-emerald-900 border-zinc-900'
+                : 'bg-zinc-100 text-zinc-800 border-zinc-900'
+            }`}>
+              {statusBadge.label}
+            </span>
           </div>
-          <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${statusBadge.color}`}>
-            {statusBadge.label}
-          </span>
-        </div>
 
-        {/* Location / Building */}
-        <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
-          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <span className="truncate">{apartment.building?.address || apartment.complex?.address || 'Воронеж'}</span>
-        </div>
-
-        {apartment.building?.district && (
-          <p className="text-[11px] text-slate-400 font-medium pl-5">
-            р-н {apartment.building.district}
-          </p>
-        )}
-      </div>
-
-      {/* Mini Blueprint Visual Scheme */}
-      <div 
-        onClick={() => onSelect(apartment)}
-        className="mx-5 my-1 py-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center cursor-pointer group hover:bg-dsk-50/50 hover:border-dsk-200 transition-colors"
-      >
-        <div className="flex items-center gap-4 text-slate-400 group-hover:text-dsk-600 transition-colors">
-          <div className="text-center">
-            <span className="block text-xl font-extrabold text-slate-800 group-hover:text-dsk-700">№{apartment.number}</span>
-            <span className="text-[11px] font-medium text-slate-400">квартира</span>
-          </div>
-          <div className="h-8 w-px bg-slate-200" />
-          <div className="text-center">
-            <span className="block text-xl font-extrabold text-slate-800 group-hover:text-dsk-700">{apartment.floor}</span>
-            <span className="text-[11px] font-medium text-slate-400">
-              из {apartment.building?.floors_count || '—'} этаж
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-600">
+            <span className="font-bold text-zinc-900">
+              {apartment.complex?.name || 'Жилой комплекс ДСК'}
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1 text-zinc-600 font-medium">
+              <MapPin className="w-3.5 h-3.5 text-zinc-500" />
+              {apartment.building?.address || apartment.complex?.address || 'Воронеж'}
+              {apartment.building?.district && ` (р-н ${apartment.building.district})`}
+            </span>
+            <span>•</span>
+            <span className="text-zinc-600 font-medium">
+              {apartment.floor} этаж из {apartment.building?.floors_count || '—'}
             </span>
           </div>
         </div>
-        <span className="text-[10px] text-slate-400 mt-2 flex items-center gap-1 group-hover:text-dsk-600">
-          Схема и параметры объекта <ArrowRight className="w-3 h-3" />
-        </span>
       </div>
 
-      {/* Specs / Attributes */}
-      <div className="px-5 py-3 grid grid-cols-2 gap-2 text-xs border-y border-slate-100 mt-2 bg-slate-50/50">
-        <div className="flex items-center gap-1.5 text-slate-600">
-          <Layers className="w-3.5 h-3.5 text-slate-400" />
-          <span>{getFinishingLabel(apartment.type_finishing)}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-slate-600 justify-end">
-          <Building className="w-3.5 h-3.5 text-slate-400" />
-          <span>Срок: {apartment.building?.readiness_percent !== undefined ? `${apartment.building.readiness_percent}% готов` : 'Строится'}</span>
-        </div>
-      </div>
-
-      {/* Pricing & Footer Actions */}
-      <div className="p-5 pt-3 mt-auto flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] text-slate-400 font-medium">Стоимость</p>
-          <p className="text-xl font-extrabold text-slate-900 tracking-tight">
+      {/* Right: Price & Single Action Button */}
+      <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-zinc-200">
+        <div className="text-left sm:text-right">
+          <p className="text-lg font-extrabold text-zinc-900 leading-tight">
             {formatPrice(apartment.price)}
           </p>
-          <p className="text-[10px] text-slate-400">
+          <p className="text-xs text-zinc-500 font-semibold mt-0.5">
             {formatPrice(pricePerSqm)} / м²
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {existingSessionId && onGoToChat ? (
           <button
-            onClick={() => onContact(apartment)}
-            className="px-3 py-2 rounded-xl text-xs font-semibold text-white bg-dsk-600 hover:bg-dsk-700 transition-colors shadow-sm shadow-dsk-600/20 flex items-center gap-1.5"
-            title="Задать вопрос менеджеру по этой квартире"
+            onClick={(e) => {
+              e.stopPropagation();
+              onGoToChat(existingSessionId);
+            }}
+            className="px-5 py-2.5 bg-[#FAF8F2] hover:bg-zinc-100 text-zinc-900 text-xs font-bold rounded-xl border-2 border-zinc-900 transition-all whitespace-nowrap flex-shrink-0 cursor-pointer flex items-center gap-1.5 shadow-xs"
           >
-            <MessageCircle className="w-3.5 h-3.5" />
-            Чат
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Перейти в чат</span>
           </button>
+        ) : onContact ? (
           <button
-            onClick={() => onSelect(apartment)}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-            title="Подробнее о квартире"
+            onClick={(e) => {
+              e.stopPropagation();
+              onContact(apartment);
+            }}
+            className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-xl border-2 border-zinc-900 transition-all whitespace-nowrap flex-shrink-0 cursor-pointer"
           >
-            <ArrowRight className="w-4 h-4" />
+            Оставить заявку
           </button>
-        </div>
+        ) : null}
       </div>
-
     </div>
   );
 };

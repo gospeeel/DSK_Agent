@@ -151,6 +151,11 @@ class NegotiationAgent:
         if intent not in ("handle_objection", "compare_competitor"):
             raise ValueError(f"Unsupported negotiation intent: {intent}")
         if deal_id is None:
+            if message and any(k in message for k in ("Клиент:", "клиент:", "Менеджер:", "переписк", "диалог", "открытом чате")):
+                return await self._llm.generate(
+                    message,
+                    system_prompt=NEGOTIATION_SYSTEM_PROMPT,
+                )
             return MISSING_DEAL_RESPONSE
 
         try:

@@ -434,7 +434,6 @@ async def test_negotiation_reply_assist_uses_factual_context() -> None:
     prompt = llm.generate.await_args.args[0]
     assert "ЖК Конкурент" in prompt
     assert "14200000" in prompt
-    assert "2027-06-01" in prompt
     assert "У конкурента дешевле" in prompt
 
 

@@ -49,35 +49,35 @@ export const DiscountPolicyModal: React.FC<DiscountPolicyModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
       <div
-        className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-2xl border border-slate-200 w-full max-w-md overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
-              <SlidersHorizontal className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700">
+              <SlidersHorizontal className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Настройка матрицы скидок</h3>
-              <p className="text-xs text-slate-500">Установка лимитов для корпуса</p>
+              <h3 className="font-bold text-slate-900 text-sm">Матрица скидок</h3>
+              <p className="text-xs text-slate-400">Лимиты скидок для корпуса</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+            className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           
           {errorMsg && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
@@ -91,7 +91,7 @@ export const DiscountPolicyModal: React.FC<DiscountPolicyModalProps> = ({
             <select
               value={buildingId}
               onChange={(e) => setBuildingId(Number(e.target.value))}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-dsk-500"
+              className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-400 focus:bg-white"
             >
               {buildings.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -104,7 +104,7 @@ export const DiscountPolicyModal: React.FC<DiscountPolicyModalProps> = ({
           {/* Select Target Role */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Для какой роли устанавливается лимит
+              Роль сотрудника
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -113,13 +113,13 @@ export const DiscountPolicyModal: React.FC<DiscountPolicyModalProps> = ({
                   setRole('manager');
                   if (parseFloat(maxDiscountPercent) > 7) setMaxDiscountPercent('5.0');
                 }}
-                className={`p-2.5 rounded-xl border text-xs font-bold transition-colors ${
+                className={`py-2 rounded-lg text-xs font-semibold border transition-colors ${
                   role === 'manager'
-                    ? 'bg-blue-50 border-dsk-400 text-dsk-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    ? 'bg-slate-900 border-slate-900 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Менеджер (manager)
+                Менеджер
               </button>
               <button
                 type="button"
@@ -127,54 +127,55 @@ export const DiscountPolicyModal: React.FC<DiscountPolicyModalProps> = ({
                   setRole('supervisor');
                   if (parseFloat(maxDiscountPercent) <= 5) setMaxDiscountPercent('12.0');
                 }}
-                className={`p-2.5 rounded-xl border text-xs font-bold transition-colors ${
+                className={`py-2 rounded-lg text-xs font-semibold border transition-colors ${
                   role === 'supervisor'
-                    ? 'bg-purple-50 border-purple-400 text-purple-700'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    ? 'bg-slate-900 border-slate-900 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
               >
-                Руководитель (supervisor)
+                Руководитель
               </button>
             </div>
           </div>
 
-          {/* Max discount percent */}
+          {/* Discount Percent Input */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Максимальный процент скидки (%)
             </label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              max={role === 'manager' ? 10 : 30}
-              value={maxDiscountPercent}
-              onChange={(e) => setMaxDiscountPercent(e.target.value)}
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-dsk-500"
-            />
-            <p className="text-[11px] text-slate-400 mt-1">
-              {role === 'manager'
-                ? 'Менеджер сможет подтверждать сделки со скидкой в пределах этого процента без эскалации.'
-                : 'Скидки свыше лимита руководителя будут блокироваться сервером.'}
-            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                max="25"
+                step="0.5"
+                value={maxDiscountPercent}
+                onChange={(e) => setMaxDiscountPercent(e.target.value)}
+                className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:border-slate-400 focus:bg-white"
+                required
+              />
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 h-9 rounded-lg flex items-center justify-center">
+                %
+              </span>
+            </div>
           </div>
 
-          {/* Submit */}
-          <div className="pt-3 flex items-center justify-end gap-2">
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl transition-colors shadow-md shadow-purple-600/20 flex items-center gap-1.5 disabled:opacity-50"
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              Сохранить версию скидки
+              <span>Сохранить</span>
             </button>
           </div>
 

@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"backend/internal/domain"
 	"backend/internal/repository"
@@ -30,22 +32,33 @@ func (s *dealService) GetDealsByBuildingID(ctx context.Context, buildingID int) 
 }
 
 type dealService struct {
-	dealRepo      repository.DealRepository
-	policyReader  discountPolicyReader
-	managerMax    float64
-	supervisorMax float64
+	dealRepo         repository.DealRepository
+	policyReader     discountPolicyReader
+	notificationRepo repository.NotificationRepository
+	userRepo         repository.UserRepository
+	chatRepo         repository.ChatRepository
+	emailSender      EmailSender
+	managerMax       float64
+	supervisorMax    float64
 }
 
 type discountPolicyReader interface {
 	GetActiveMax(ctx context.Context, apartmentID int, role domain.Role) (string, error)
 }
 
-func NewDealService(dealRepo repository.DealRepository, managerMax, supervisorMax float64, readers ...discountPolicyReader) DealService {
+func NewDealService(dealRepo repository.DealRepository, managerMax, supervisorMax float64, readers ...discountPolicyReader) *dealService {
 	var reader discountPolicyReader
 	if len(readers) > 0 {
 		reader = readers[0]
 	}
 	return &dealService{dealRepo: dealRepo, policyReader: reader, managerMax: managerMax, supervisorMax: supervisorMax}
+}
+
+func (s *dealService) SetNotificationDependencies(notifRepo repository.NotificationRepository, userRepo repository.UserRepository, chatRepo repository.ChatRepository, emailSender EmailSender) {
+	s.notificationRepo = notifRepo
+	s.userRepo = userRepo
+	s.chatRepo = chatRepo
+	s.emailSender = emailSender
 }
 
 func roundPrice(val float64) float64 {
@@ -93,7 +106,46 @@ func (s *dealService) CreateDeal(ctx context.Context, req domain.CreateDealReque
 		TotalPrice:      totalPrice,
 	}
 
-	return s.dealRepo.CreateDeal(ctx, deal)
+	createdDeal, err := s.dealRepo.CreateDeal(ctx, deal)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. In-app notification for client
+	if s.notificationRepo != nil {
+		notif := &domain.Notification{
+			UserID:  createdDeal.UserID,
+			DealID:  &createdDeal.ID,
+			Type:    domain.NotificationTypeDealUpdate,
+			Title:   fmt.Sprintf("Сформирована сделка #%d", createdDeal.ID),
+			Message: fmt.Sprintf("Менеджер оформил сделку #%d по выбранной квартире. Статус: «На согласовании». Квартира забронирована.", createdDeal.ID),
+			IsRead:  false,
+		}
+		_, _ = s.notificationRepo.CreateNotification(ctx, notif)
+	}
+
+	// 2. Email via SMTP
+	if s.emailSender != nil && s.userRepo != nil {
+		client, userErr := s.userRepo.GetUserByID(ctx, createdDeal.UserID)
+		if userErr == nil && client != nil && strings.TrimSpace(client.Email) != "" {
+			subject := fmt.Sprintf("Оформление сделки #%d — АО СЗ «ДСК»", createdDeal.ID)
+			body := fmt.Sprintf("Здравствуйте, %s!\n\nМенеджер оформил сделку #%d. Статус: «На согласовании». Квартира успешно забронирована.\nИтоговая сумма: %.2f руб.\n\nВы можете ознакомиться с условиями и согласовать сделку в вашем личном кабинете.\n\nС уважением,\nОтдел продаж АО СЗ «ДСК»", client.Name, createdDeal.ID, createdDeal.TotalPrice)
+			_ = s.emailSender.SendEmail(client.Email, subject, body)
+		}
+	}
+
+	// 3. System message in chat session
+	if s.chatRepo != nil && createdDeal.ChatSessionID != nil {
+		sysMsg := &domain.Message{
+			ChatSessionID: *createdDeal.ChatSessionID,
+			SenderType:    "system",
+			Content:       fmt.Sprintf("Сформирована сделка #%d на сумму %.2f руб. Статус заявки и сделки переведен в «На согласовании». Квартира забронирована.", createdDeal.ID, createdDeal.TotalPrice),
+			IsRead:        false,
+		}
+		_, _ = s.chatRepo.CreateMessage(ctx, sysMsg)
+	}
+
+	return createdDeal, nil
 }
 
 func (s *dealService) GetDealByID(ctx context.Context, id int) (*domain.Deal, error) {
@@ -109,9 +161,29 @@ func (s *dealService) UpdateDealStatus(ctx context.Context, id int, req domain.U
 	if err != nil {
 		return nil, err
 	}
-	if actor == nil || (actor.Role == domain.RoleManager && existing.EmployeeID != actor.ID) || (actor.Role != domain.RoleManager && actor.Role != domain.RoleSupervisor) {
+	if actor == nil {
 		return nil, ErrDealForbidden
 	}
+
+	// Validate actor permissions:
+	// - Manager can manage their own deals
+	// - Supervisor can manage any deal
+	// - User/client can confirm (contract) or reject (cancelled) their own deal
+	if actor.Role == domain.RoleUser {
+		if existing.UserID != actor.ID {
+			return nil, ErrDealForbidden
+		}
+		if req.Status != domain.DealStatusContract && req.Status != domain.DealStatusCancelled {
+			return nil, ErrInvalidDealData
+		}
+	} else if actor.Role == domain.RoleManager {
+		if existing.EmployeeID != actor.ID {
+			return nil, ErrDealForbidden
+		}
+	} else if actor.Role != domain.RoleSupervisor {
+		return nil, ErrDealForbidden
+	}
+
 	if req.Status != domain.DealStatusPending && req.Status != domain.DealStatusContract && req.Status != domain.DealStatusCompleted && req.Status != domain.DealStatusCancelled {
 		return nil, ErrInvalidDealData
 	}
@@ -136,7 +208,35 @@ func (s *dealService) UpdateDealStatus(ctx context.Context, id int, req domain.U
 		totalPrice = &tp
 	}
 
-	return s.dealRepo.UpdateDealStatus(ctx, id, req.Status, discount, totalPrice)
+	updatedDeal, err := s.dealRepo.UpdateDealStatus(ctx, id, req.Status, discount, totalPrice)
+	if err != nil {
+		return nil, err
+	}
+
+	if updatedDeal.ChatSessionID != nil && s.chatRepo != nil {
+		var content string
+		switch req.Status {
+		case domain.DealStatusContract:
+			content = fmt.Sprintf("Клиент подтвердил сделку #%d. Статус заявки изменен на «Согласовано» (Договор).", updatedDeal.ID)
+		case domain.DealStatusCompleted:
+			content = fmt.Sprintf("Сделка #%d успешно закрыта и завершена. Квартира переведена в статус «Продано».", updatedDeal.ID)
+		case domain.DealStatusPending:
+			content = fmt.Sprintf("Предложение по сделке #%d возвращено в работу для корректировки условий.", updatedDeal.ID)
+		case domain.DealStatusCancelled:
+			content = fmt.Sprintf("Сделка #%d отменена.", updatedDeal.ID)
+		}
+		if content != "" {
+			sysMsg := &domain.Message{
+				ChatSessionID: *updatedDeal.ChatSessionID,
+				SenderType:    "system",
+				Content:       content,
+				IsRead:        false,
+			}
+			_, _ = s.chatRepo.CreateMessage(ctx, sysMsg)
+		}
+	}
+
+	return updatedDeal, nil
 }
 
 func (s *dealService) maxDiscount(ctx context.Context, apartmentID int, role domain.Role) (float64, error) {

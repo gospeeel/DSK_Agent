@@ -57,4 +57,9 @@ export const chatsApi = {
   rejectSession: async (sessionId: number, reason: string): Promise<any> => {
     return api.post(`/chat/sessions/${sessionId}/reject`, { reason }, true);
   },
+
+  // Client deletes / hides session from view
+  deleteSession: async (sessionId: number): Promise<{ message: string }> => {
+    return api.delete<{ message: string }>(`/chat/sessions/${sessionId}`, false);
+  },
 };

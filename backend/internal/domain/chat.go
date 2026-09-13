@@ -10,24 +10,27 @@ const (
 type ChatSessionStatus string
 
 const (
-	ChatSessionStatusOpen       ChatSessionStatus = "open"
-	ChatSessionStatusInProgress ChatSessionStatus = "in_progress"
-	ChatSessionStatusClose      ChatSessionStatus = "close"
+	ChatSessionStatusOpen            ChatSessionStatus = "open"
+	ChatSessionStatusInProgress      ChatSessionStatus = "in_progress"
+	ChatSessionStatusPendingApproval ChatSessionStatus = "pending_approval"
+	ChatSessionStatusContract        ChatSessionStatus = "contract"
+	ChatSessionStatusClose           ChatSessionStatus = "close"
 )
 
 type ChatSession struct {
-	ID          int               `json:"id"`
-	UserID      *int              `json:"id_user"`
-	EmployeeID  *int              `json:"id_employee"`
-	ApartmentID *int              `json:"id_apartment"`
-	GuestName   *string           `json:"guest_name,omitempty"`
-	GuestEmail  *string           `json:"guest_email,omitempty"`
-	GuestPhone  *string           `json:"guest_phone,omitempty"`
-	Status      ChatSessionStatus `json:"status"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at"`
-	UserName     *string          `json:"user_name,omitempty"`
-	EmployeeName *string          `json:"employee_name,omitempty"`
+	ID            int               `json:"id"`
+	UserID        *int              `json:"id_user"`
+	EmployeeID    *int              `json:"id_employee"`
+	ApartmentID   *int              `json:"id_apartment"`
+	GuestName     *string           `json:"guest_name,omitempty"`
+	GuestEmail    *string           `json:"guest_email,omitempty"`
+	GuestPhone    *string           `json:"guest_phone,omitempty"`
+	Status        ChatSessionStatus `json:"status"`
+	DeletedByUser bool              `json:"deleted_by_user"`
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
+	UserName      *string           `json:"user_name,omitempty"`
+	EmployeeName  *string           `json:"employee_name,omitempty"`
 }
 
 type ChatSessionRejection struct {

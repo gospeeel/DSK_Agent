@@ -92,13 +92,19 @@ func NewDealRepository(db *pgxpool.Pool) DealRepository {
 }
 
 func (r *dealRepository) CreateDeal(ctx context.Context, deal *domain.Deal) (*domain.Deal, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
 	query := `
 		INSERT INTO deals (id_user, id_employee, id_apartment, id_chat_session, base_price, percent_discount, total_price, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
 		RETURNING id, id_user, id_employee, id_apartment, id_chat_session, base_price, percent_discount, total_price, status, created_at, updated_at
 	`
 	var d domain.Deal
-	err := r.db.QueryRow(ctx, query,
+	err = tx.QueryRow(ctx, query,
 		deal.UserID,
 		deal.EmployeeID,
 		deal.ApartmentID,
@@ -123,6 +129,19 @@ func (r *dealRepository) CreateDeal(ctx context.Context, deal *domain.Deal) (*do
 	if err != nil {
 		return nil, err
 	}
+
+	// Update apartment status to booked
+	_, _ = tx.Exec(ctx, `UPDATE apartments SET status = 'booked' WHERE id = $1`, deal.ApartmentID)
+
+	// Update chat session status to pending_approval if chat session exists
+	if deal.ChatSessionID != nil {
+		_, _ = tx.Exec(ctx, `UPDATE chat_sessions SET status = 'pending_approval', updated_at = NOW() WHERE id = $1`, *deal.ChatSessionID)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	return &d, nil
 }
 
@@ -230,6 +249,12 @@ func (r *dealRepository) GetDeals(ctx context.Context, userID *int, employeeID *
 }
 
 func (r *dealRepository) UpdateDealStatus(ctx context.Context, id int, status domain.DealStatus, discount *float64, totalPrice *float64) (*domain.Deal, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
 	query := `
 		UPDATE deals 
 		SET status = $1,
@@ -240,7 +265,7 @@ func (r *dealRepository) UpdateDealStatus(ctx context.Context, id int, status do
 		RETURNING id, id_user, id_employee, id_apartment, id_chat_session, base_price, percent_discount, total_price, status, created_at, updated_at
 	`
 	var d domain.Deal
-	err := r.db.QueryRow(ctx, query, status, discount, totalPrice, id).Scan(
+	err = tx.QueryRow(ctx, query, status, discount, totalPrice, id).Scan(
 		&d.ID,
 		&d.UserID,
 		&d.EmployeeID,
@@ -259,5 +284,33 @@ func (r *dealRepository) UpdateDealStatus(ctx context.Context, id int, status do
 		}
 		return nil, err
 	}
+
+	// Update apartment status & chat session status based on deal status
+	if status == domain.DealStatusCompleted {
+		_, _ = tx.Exec(ctx, `UPDATE apartments SET status = 'sold' WHERE id = $1`, d.ApartmentID)
+		if d.ChatSessionID != nil {
+			_, _ = tx.Exec(ctx, `UPDATE chat_sessions SET status = 'close', updated_at = NOW() WHERE id = $1`, *d.ChatSessionID)
+		}
+	} else if status == domain.DealStatusContract {
+		_, _ = tx.Exec(ctx, `UPDATE apartments SET status = 'booked' WHERE id = $1`, d.ApartmentID)
+		if d.ChatSessionID != nil {
+			_, _ = tx.Exec(ctx, `UPDATE chat_sessions SET status = 'contract', updated_at = NOW() WHERE id = $1`, *d.ChatSessionID)
+		}
+	} else if status == domain.DealStatusCancelled {
+		_, _ = tx.Exec(ctx, `UPDATE apartments SET status = 'free' WHERE id = $1`, d.ApartmentID)
+		if d.ChatSessionID != nil {
+			_, _ = tx.Exec(ctx, `UPDATE chat_sessions SET status = 'in_progress', updated_at = NOW() WHERE id = $1`, *d.ChatSessionID)
+		}
+	} else if status == domain.DealStatusPending {
+		_, _ = tx.Exec(ctx, `UPDATE apartments SET status = 'booked' WHERE id = $1`, d.ApartmentID)
+		if d.ChatSessionID != nil {
+			_, _ = tx.Exec(ctx, `UPDATE chat_sessions SET status = 'pending_approval', updated_at = NOW() WHERE id = $1`, *d.ChatSessionID)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	return &d, nil
 }

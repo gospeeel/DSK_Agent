@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/layout/Navbar';
-import { Footer } from './components/layout/Footer';
+import { FloatingAIAssistantWidget } from './components/chat/FloatingAIAssistantWidget';
 import { ApartmentsPage } from './pages/ApartmentsPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -10,6 +10,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { ManagerDashboardPage } from './pages/ManagerDashboardPage';
 import { SupervisorDashboardPage } from './pages/SupervisorDashboardPage';
 import { SupervisorDiscountsPage } from './pages/SupervisorDiscountsPage';
+import { DealDetailsPage } from './pages/DealDetailsPage';
 
 // Route Guards
 const ProtectedUserRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -41,13 +42,14 @@ export const App: React.FC = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
+        <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900">
           <Navbar />
           <main className="flex-1">
             <Routes>
               {/* Public catalog */}
               <Route path="/" element={<ApartmentsPage />} />
               <Route path="/apartments" element={<ApartmentsPage />} />
+              <Route path="/apartments/:id" element={<ApartmentsPage />} />
 
               {/* Auth */}
               <Route path="/login" element={<LoginPage />} />
@@ -59,6 +61,16 @@ export const App: React.FC = () => {
                 element={
                   <ProtectedUserRoute>
                     <ProfilePage />
+                  </ProtectedUserRoute>
+                }
+              />
+
+              {/* Deals & Commercial Offers */}
+              <Route
+                path="/deals/:id"
+                element={
+                  <ProtectedUserRoute>
+                    <DealDetailsPage />
                   </ProtectedUserRoute>
                 }
               />
@@ -95,7 +107,7 @@ export const App: React.FC = () => {
               <Route path="*" element={<Navigate to="/apartments" replace />} />
             </Routes>
           </main>
-          <Footer />
+          <FloatingAIAssistantWidget />
         </div>
       </BrowserRouter>
     </AuthProvider>

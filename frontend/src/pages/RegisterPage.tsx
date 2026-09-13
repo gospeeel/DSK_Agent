@@ -43,92 +43,92 @@ export const RegisterPage: React.FC = () => {
         
         {/* Top Branding */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-dsk-700 to-dsk-500 mx-auto flex items-center justify-center text-white shadow-md shadow-dsk-500/20">
-            <Building2 className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-2xl bg-white border-2 border-zinc-900 text-zinc-900 mx-auto flex items-center justify-center font-bold">
+            <Building2 className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-2xl font-black tracking-tight text-zinc-900">
             Регистрация покупателя
           </h1>
-          <p className="text-xs text-slate-500">
-            Создайте аккаунт для сохранения подборок и прямого чата с менеджером
+          <p className="text-xs font-medium text-zinc-600">
+            Создайте аккаунт для бронирования и прямого чата с менеджером
           </p>
         </div>
 
         {/* Form Box */}
-        <div className="bg-white p-7 rounded-3xl shadow-soft border border-slate-200/90 space-y-5">
+        <div className="bg-white p-6 sm:p-7 rounded-2xl border-2 border-zinc-900 space-y-5">
           
           {errorMsg && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="p-3 bg-rose-50 border-2 border-rose-300 text-xs font-medium text-rose-800 rounded-xl flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
                 ФИО / Ваше имя
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <User className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Иван Иванов"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-dsk-500 focus:bg-white"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-[#FAF8F2] border-2 border-zinc-300 focus:border-zinc-900 rounded-xl text-xs font-medium text-zinc-900 placeholder-zinc-400 focus:outline-none focus:bg-white transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
                 Электронная почта
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <Mail className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-dsk-500 focus:bg-white"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-[#FAF8F2] border-2 border-zinc-300 focus:border-zinc-900 rounded-xl text-xs font-medium text-zinc-900 placeholder-zinc-400 focus:outline-none focus:bg-white transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
                 Пароль
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <Lock className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-dsk-500 focus:bg-white"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-[#FAF8F2] border-2 border-zinc-300 focus:border-zinc-900 rounded-xl text-xs font-medium text-zinc-900 placeholder-zinc-400 focus:outline-none focus:bg-white transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
                 Подтверждение пароля
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <Lock className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                 <input
                   type="password"
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-dsk-500 focus:bg-white"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-[#FAF8F2] border-2 border-zinc-300 focus:border-zinc-900 rounded-xl text-xs font-medium text-zinc-900 placeholder-zinc-400 focus:outline-none focus:bg-white transition-all"
                 />
               </div>
             </div>
@@ -136,22 +136,27 @@ export const RegisterPage: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-dsk-600 hover:bg-dsk-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-dsk-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all border-2 border-zinc-900 disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-              Зарегистрироваться
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <UserPlus className="w-4 h-4" />
+              )}
+              <span>Создать аккаунт</span>
             </button>
           </form>
 
-        </div>
+          <div className="text-center pt-2">
+            <p className="text-xs font-medium text-zinc-600">
+              Уже есть аккаунт?{' '}
+              <Link to="/login" className="text-zinc-900 font-bold hover:underline">
+                Войти в систему
+              </Link>
+            </p>
+          </div>
 
-        {/* Footer Link */}
-        <p className="text-center text-xs text-slate-500">
-          Уже есть аккаунт?{' '}
-          <Link to="/login" className="font-bold text-dsk-600 hover:text-dsk-700 underline">
-            Войти
-          </Link>
-        </p>
+        </div>
 
       </div>
     </div>

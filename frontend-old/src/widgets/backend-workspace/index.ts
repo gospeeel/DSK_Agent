@@ -1,8 +1,0 @@
-export { default as Overview } from './ui/Overview.vue'
-export { default as Correspondence } from './ui/Correspondence.vue'
-export { default as Deals } from './ui/Deals.vue'
-export { default as UnavailableOffers } from './ui/UnavailableOffers.vue'
-export { default as Clients } from './ui/Clients.vue'
-export { default as ClientDetails } from './ui/ClientDetails.vue'
-export { default as AiAssistant } from './ui/AiAssistant.vue'
-export { default as Profile } from './ui/Profile.vue'

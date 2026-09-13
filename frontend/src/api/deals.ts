@@ -51,8 +51,8 @@ export const dealsApi = {
     return api.post<Deal>('/deals', payload, true);
   },
 
-  updateDealStatus: async (dealId: number, status: DealStatus, percentDiscount?: number): Promise<Deal> => {
-    return api.put<Deal>(`/deals/${dealId}/status`, { status, percent_discount: percentDiscount }, true);
+  updateDealStatus: async (dealId: number, status: DealStatus, percentDiscount?: number, isStaff = true): Promise<Deal> => {
+    return api.put<Deal>(`/deals/${dealId}/status`, { status, percent_discount: percentDiscount }, isStaff);
   },
 
   // Offers

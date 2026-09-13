@@ -1,9 +1,0 @@
-node_modules
-dist
-.git
-.gitignore
-.env*
-test-results
-playwright-report
-e2e
-*.log

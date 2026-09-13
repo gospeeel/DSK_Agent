@@ -9,8 +9,9 @@ import (
 func intPointer(value int) *int { return &value }
 
 func TestChatSessionAccessByRole(t *testing.T) {
-	assigned := &domain.ChatSession{UserID: intPointer(7), EmployeeID: intPointer(11)}
-	unassigned := &domain.ChatSession{UserID: intPointer(7)}
+	assigned := &domain.ChatSession{UserID: intPointer(7), EmployeeID: intPointer(11), ApartmentID: intPointer(101)}
+	unassignedApartment := &domain.ChatSession{UserID: intPointer(7), ApartmentID: intPointer(101)}
+	unassignedGeneral := &domain.ChatSession{UserID: intPointer(7), ApartmentID: nil}
 
 	cases := []struct {
 		name   string
@@ -34,10 +35,13 @@ func TestChatSessionAccessByRole(t *testing.T) {
 			}
 		})
 	}
-	if !canReadSession(&domain.User{ID: 12, Role: domain.RoleManager}, unassigned) {
-		t.Fatal("unassigned session must remain visible in the manager queue")
+	if !canReadSession(&domain.User{ID: 12, Role: domain.RoleManager}, unassignedApartment) {
+		t.Fatal("unassigned apartment session must remain visible in the manager queue")
 	}
-	if canManageSession(&domain.User{ID: 12, Role: domain.RoleManager}, unassigned) {
-		t.Fatal("manager must take an unassigned session before writing")
+	if canManageSession(&domain.User{ID: 12, Role: domain.RoleManager}, unassignedApartment) {
+		t.Fatal("manager must take an unassigned apartment session before writing")
+	}
+	if !canManageSession(&domain.User{ID: 12, Role: domain.RoleManager}, unassignedGeneral) {
+		t.Fatal("manager must be able to answer general questions directly without taking")
 	}
 }

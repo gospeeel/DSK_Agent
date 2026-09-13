@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { ChatSession, Apartment, Deal } from '../../types';
 import { dealsApi } from '../../api/deals';
+import { chatsApi } from '../../api/chats';
 import { formatPrice } from '../../lib/utils';
 
 interface CreateDealModalProps {
@@ -55,42 +56,42 @@ export const CreateDealModal: React.FC<CreateDealModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
       <div
-        className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-2xl border border-slate-200 w-full max-w-md overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-dsk-100 text-dsk-700">
-              <FileText className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700">
+              <FileText className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Оформление сделки</h3>
-              <p className="text-xs text-slate-500">Диалог #{session.id}</p>
+              <h3 className="font-bold text-slate-900 text-sm">Оформление сделки</h3>
+              <p className="text-xs text-slate-400">Обращение #{session.id}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+            className="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleCreate} className="p-6 space-y-4">
+        <form onSubmit={handleCreate} className="p-5 space-y-4">
           
           {errorMsg && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* Client & Apartment snippet */}
-          <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1 text-xs">
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-500">Клиент ID:</span>
               <span className="font-semibold text-slate-900">{session.id_user || 'Гость'}</span>
@@ -98,83 +99,70 @@ export const CreateDealModal: React.FC<CreateDealModalProps> = ({
             <div className="flex justify-between">
               <span className="text-slate-500">Квартира:</span>
               <span className="font-semibold text-slate-900">
-                {apartment ? `№${apartment.number} (${apartment.rooms}-комн., ${apartment.area} м²)` : `ID ${session.id_apartment || '—'}`}
+                {apartment ? `№${apartment.number} (${apartment.area} м²)` : session.id_apartment || 'Не выбрана'}
               </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between border-t border-slate-200/60 pt-1.5">
               <span className="text-slate-500">Базовая стоимость:</span>
               <span className="font-bold text-slate-900">{formatPrice(basePrice)}</span>
             </div>
           </div>
 
-          {/* Discount Input */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Процент скидки (%)
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                type="number"
-                min="0"
-                max="25"
-                step="0.5"
-                value={discountPercent}
-                onChange={(e) => setDiscountPercent(Math.max(0, parseFloat(e.target.value) || 0))}
-                className="w-24 px-3 py-2 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-dsk-500"
-              />
-              <div className="flex-1 flex items-center gap-1.5">
-                {[0, 3, 5, 7].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => setDiscountPercent(pct)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors ${
-                      discountPercent === pct
-                        ? 'bg-dsk-50 border-dsk-300 text-dsk-700'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {pct}%
-                  </button>
-                ))}
-              </div>
+          {/* Discount Slider & Input */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <label className="font-semibold text-slate-700">
+                Скидка менеджера:
+              </label>
+              <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
+                {discountPercent}%
+              </span>
             </div>
+
+            <input
+              type="range"
+              min="0"
+              max="15"
+              step="0.5"
+              value={discountPercent}
+              onChange={(e) => setDiscountPercent(parseFloat(e.target.value))}
+              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
+            />
             {discountPercent > 5 && (
-              <p className="text-[11px] text-amber-600 mt-1">
-                * Скидки свыше 5% могут потребовать согласования руководителя.
+              <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                Скидки выше 5% потребуют утверждения руководителем.
               </p>
             )}
           </div>
 
-          {/* Final price summary */}
-          <div className="p-4 rounded-2xl bg-dsk-50/80 border border-dsk-100 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-medium text-dsk-700">Итоговая сумма по сделке</p>
-              <p className="text-xl font-extrabold text-slate-900 mt-0.5">{formatPrice(totalPrice)}</p>
+          {/* Calculation Summary */}
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1 text-xs">
+            <div className="flex justify-between text-slate-500">
+              <span>Сумма скидки:</span>
+              <span>- {formatPrice(discountAmount)}</span>
             </div>
-            {discountAmount > 0 && (
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-lg">
-                Экономия {formatPrice(discountAmount)}
-              </span>
-            )}
+            <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200/60 pt-1">
+              <span>Итоговая сумма:</span>
+              <span>{formatPrice(totalPrice)}</span>
+            </div>
           </div>
 
-          {/* Actions */}
-          <div className="pt-2 flex items-center justify-end gap-2">
+          {/* Buttons */}
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 text-xs font-bold text-white bg-dsk-600 hover:bg-dsk-700 rounded-xl transition-colors shadow-md shadow-dsk-600/20 flex items-center gap-1.5 disabled:opacity-50"
+              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              Подтвердить и создать сделку
+              <span>Создать сделку</span>
             </button>
           </div>
 

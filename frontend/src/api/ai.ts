@@ -17,13 +17,16 @@ export const aiApi = {
   },
 
   // Ask AI Assistant general questions or specific object assistance
-  askAssistant: async (payload: {
-    session_id: number;
-    deal_id?: number;
-    message: string;
-    parking_unit_id?: number;
-    storage_unit_id?: number;
-  }): Promise<AIChatResponse> => {
-    return api.post<AIChatResponse>('/ai/chat', payload, true);
+  askAssistant: async (
+    payload: {
+      session_id: number;
+      deal_id?: number;
+      message: string;
+      parking_unit_id?: number;
+      storage_unit_id?: number;
+    },
+    isStaff = true
+  ): Promise<AIChatResponse> => {
+    return api.post<AIChatResponse>('/ai/chat', payload, isStaff);
   },
 };

@@ -38,6 +38,12 @@ export const apartmentsApi = {
     return Array.isArray(res) ? res : [];
   },
 
+  // Ancillary units (parking and storage)
+  getAncillaryUnits: async (buildingId: number): Promise<any[]> => {
+    const res = await api.get<any[]>(`/buildings/${buildingId}/ancillary-units`, false);
+    return Array.isArray(res) ? res : [];
+  },
+
   // Fetch all apartments across all complexes & buildings for /apartments
   getAllAvailableApartments: async (): Promise<{
     apartments: Apartment[];

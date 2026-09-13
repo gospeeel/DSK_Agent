@@ -33,9 +33,9 @@ export function getRoomsLabel(rooms: number): string {
 export function getFinishingLabel(type: FinishingType): string {
   switch (type) {
     case 'turnkey':
-      return 'Чистовая (под ключ)';
+      return 'Чистовая отделка';
     case 'white_box':
-      return 'Предчистовая (White box)';
+      return 'Предчистовая отделка';
     case 'rough':
       return 'Черновая отделка';
     default:
@@ -46,11 +46,11 @@ export function getFinishingLabel(type: FinishingType): string {
 export function getApartmentStatusBadge(status: ApartmentStatus): { label: string; color: string } {
   switch (status) {
     case 'free':
-      return { label: 'Свободна', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      return { label: 'В продаже', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
     case 'booked':
-      return { label: 'Забронирована', color: 'bg-amber-50 text-amber-700 border-amber-200' };
+      return { label: 'Забронировано', color: 'bg-amber-50 text-amber-700 border-amber-200' };
     case 'sold':
-      return { label: 'Продана', color: 'bg-slate-100 text-slate-500 border-slate-200' };
+      return { label: 'Продано', color: 'bg-slate-100 text-slate-500 border-slate-200' };
     default:
       return { label: status, color: 'bg-slate-50 text-slate-700 border-slate-200' };
   }
@@ -59,15 +59,32 @@ export function getApartmentStatusBadge(status: ApartmentStatus): { label: strin
 export function getDealStatusBadge(status: DealStatus): { label: string; color: string } {
   switch (status) {
     case 'pending':
-      return { label: 'В обработке', color: 'bg-amber-50 text-amber-700 border-amber-200' };
+      return { label: 'На согласовании', color: 'bg-amber-50 text-amber-700 border-amber-200' };
     case 'contract':
-      return { label: 'Подготовка договора', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+      return { label: 'Согласовано', color: 'bg-blue-50 text-blue-700 border-blue-200' };
     case 'completed':
-      return { label: 'Завершена', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      return { label: 'Завершено', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
     case 'cancelled':
-      return { label: 'Отменена', color: 'bg-rose-50 text-rose-700 border-rose-200' };
+      return { label: 'Отменено', color: 'bg-rose-50 text-rose-700 border-rose-200' };
     default:
       return { label: status, color: 'bg-slate-50 text-slate-700 border-slate-200' };
+  }
+}
+
+export function getChatSessionStatusBadge(status: string): { label: string; color: string } {
+  switch (status) {
+    case 'open':
+      return { label: 'Ожидает', color: 'bg-[#FEF7EE] text-amber-900 border-zinc-900' };
+    case 'in_progress':
+      return { label: 'В работе', color: 'bg-[#EBF7EE] text-emerald-900 border-zinc-900' };
+    case 'pending_approval':
+      return { label: 'На согласовании', color: 'bg-[#FEF7EE] text-amber-900 border-zinc-900' };
+    case 'contract':
+      return { label: 'Согласовано', color: 'bg-blue-50 text-blue-900 border-zinc-900' };
+    case 'close':
+      return { label: 'Завершено', color: 'bg-zinc-100 text-zinc-800 border-zinc-900' };
+    default:
+      return { label: status, color: 'bg-zinc-100 text-zinc-800 border-zinc-900' };
   }
 }
 

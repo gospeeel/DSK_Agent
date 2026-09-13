@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Building2, SlidersHorizontal, Sparkles, RefreshCw, X, ShieldCheck } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Search, SlidersHorizontal, RefreshCw, X, Building2, MessageSquare } from 'lucide-react';
 import { Apartment, ResidentialComplex, Building, FinishingType } from '../types';
 import { apartmentsApi } from '../api/apartments';
 import { chatsApi } from '../api/chats';
@@ -10,8 +10,10 @@ import { useAuth } from '../context/AuthContext';
 import { formatPrice } from '../lib/utils';
 
 export const ApartmentsPage: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
+  const { id: urlApartmentId } = useParams<{ id?: string }>();
+  const isStaff = user?.role === 'manager' || user?.role === 'supervisor';
 
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [complexes, setComplexes] = useState<ResidentialComplex[]>([]);
@@ -21,13 +23,16 @@ export const ApartmentsPage: React.FC = () => {
   // Filters
   const [selectedComplexId, setSelectedComplexId] = useState<number | 'all'>('all');
   const [selectedRooms, setSelectedRooms] = useState<number | 'all'>('all');
-  const [selectedFinishing, setSelectedFinishing] = useState<FinishingType | 'all'>('all');
+  const [minPrice, setMinPrice] = useState<number>(0);
   const [maxPrice, setMaxPrice] = useState<number>(15000000);
-  const [onlyFree, setOnlyFree] = useState<boolean>(true);
+  const [minArea, setMinArea] = useState<number>(0);
+  const [maxArea, setMaxArea] = useState<number>(150);
+
+  // User chat sessions mapping: apartment_id -> session_id
+  const [userSessionsMap, setUserSessionsMap] = useState<Record<number, number>>({});
 
   // Selected apartment for modal
   const [activeApartment, setActiveApartment] = useState<Apartment | null>(null);
-  const [contactingApt, setContactingApt] = useState<Apartment | null>(null);
 
   const loadCatalog = async () => {
     setLoading(true);
@@ -36,6 +41,27 @@ export const ApartmentsPage: React.FC = () => {
       setApartments(data.apartments);
       setComplexes(data.complexes);
       setBuildings(data.buildings);
+
+      // Check if URL has specific apartment ID
+      if (urlApartmentId) {
+        const target = data.apartments.find((a) => a.id === Number(urlApartmentId));
+        if (target) setActiveApartment(target);
+      }
+
+      if (isAuthenticated && !isStaff) {
+        try {
+          const sessions = await chatsApi.getMySessions();
+          const map: Record<number, number> = {};
+          for (const s of sessions) {
+            if (s.id_apartment && !s.deleted_by_user) {
+              map[s.id_apartment] = s.id;
+            }
+          }
+          setUserSessionsMap(map);
+        } catch {
+          // ignore
+        }
+      }
     } catch (err) {
       console.error('Failed to load apartments catalog:', err);
     } finally {
@@ -45,12 +71,37 @@ export const ApartmentsPage: React.FC = () => {
 
   useEffect(() => {
     loadCatalog();
-  }, []);
+  }, [isAuthenticated, isStaff]);
+
+  // Update active apartment when URL param changes
+  useEffect(() => {
+    if (urlApartmentId && apartments.length > 0) {
+      const target = apartments.find((a) => a.id === Number(urlApartmentId));
+      if (target) {
+        setActiveApartment(target);
+      }
+    } else if (!urlApartmentId) {
+      setActiveApartment(null);
+    }
+  }, [urlApartmentId, apartments]);
+
+  const handleSelectApartment = (apt: Apartment) => {
+    setActiveApartment(apt);
+    navigate(`/apartments/${apt.id}`);
+  };
+
+  const handleCloseModal = () => {
+    setActiveApartment(null);
+    navigate('/apartments');
+  };
+
+  const handleGoToChat = (sessionId: number) => {
+    navigate(`/profile?session=${sessionId}`);
+  };
 
   const handleContactManager = async (apt: Apartment) => {
     if (!isAuthenticated) {
-      // Guest can still open login with redirect
-      navigate(`/login?redirect=/apartments&apt=${apt.id}`);
+      navigate(`/login?redirect=/apartments/${apt.id}&apt=${apt.id}`);
       return;
     }
 
@@ -58,7 +109,6 @@ export const ApartmentsPage: React.FC = () => {
       const session = await chatsApi.createSession({
         id_apartment: apt.id,
       });
-      // Navigate to profile or chat with this session selected
       navigate(`/profile?session=${session.id}`);
     } catch (err) {
       console.error('Failed to create chat session for apartment:', err);
@@ -66,57 +116,81 @@ export const ApartmentsPage: React.FC = () => {
     }
   };
 
-  // Filter logic
+  const handleContactGeneralManager = async () => {
+    if (!isAuthenticated) {
+      navigate('/login?redirect=/profile');
+      return;
+    }
+
+    try {
+      const session = await chatsApi.createSession({});
+      navigate(`/profile?session=${session.id}`);
+    } catch (err) {
+      console.error('Failed to create general chat session:', err);
+      navigate('/profile');
+    }
+  };
+
+  // Filter logic: always show only available apartments
   const filteredApartments = apartments.filter((apt) => {
+    if (apt.status !== 'free') {
+      return false;
+    }
     if (selectedComplexId !== 'all' && apt.building?.residential_complex_id !== selectedComplexId) {
       return false;
     }
     if (selectedRooms !== 'all' && apt.rooms !== selectedRooms) {
       return false;
     }
-    if (selectedFinishing !== 'all' && apt.type_finishing !== selectedFinishing) {
+    if (apt.price < minPrice) {
       return false;
     }
-    if (apt.price > maxPrice) {
+    if (maxPrice > 0 && apt.price > maxPrice) {
       return false;
     }
-    if (onlyFree && apt.status !== 'free') {
+    if (minArea > 0 && apt.area < minArea) {
+      return false;
+    }
+    if (maxArea > 0 && apt.area > maxArea) {
       return false;
     }
     return true;
   });
 
   return (
-    <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
       
-      {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy-950 via-navy-900 to-dsk-950 text-white p-8 sm:p-10 shadow-xl border border-slate-800">
-        <div className="relative z-10 max-w-2xl space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-dsk-500/20 text-dsk-300 text-xs font-semibold border border-dsk-400/30">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            Каталог недвижимости АО СЗ «ДСК»
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            Квартиры в Воронеже от надёжного застройщика
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold text-zinc-900 tracking-tight">
+            Каталог квартир
           </h1>
-          <p className="text-sm text-slate-300 leading-relaxed">
-            Прямые цены без посредников, прозрачные сроки сдачи, эскроу-счета и персональный подбор от менеджера.
+          <p className="text-xs text-zinc-500 font-medium mt-1">
+            Все доступные к покупке квартиры в жилых комплексах ДСК
           </p>
         </div>
 
-        {/* Subtle decorative circles */}
-        <div className="absolute right-0 top-0 -mt-12 -mr-12 w-96 h-96 bg-dsk-600/10 rounded-full blur-3xl pointer-events-none" />
+        {!isStaff && (
+          <button
+            onClick={handleContactGeneralManager}
+            className="px-4 py-2.5 bg-white hover:bg-[#FAF8F2] text-zinc-900 text-xs font-extrabold rounded-2xl border-2 border-zinc-900 transition-colors flex items-center gap-2 shadow-xs cursor-pointer self-start sm:self-auto"
+            title="Задать вопрос менеджеру отдела продаж по подбору или ипотеке"
+          >
+            <MessageSquare className="w-4 h-4 text-zinc-900" />
+            <span>Консультация с менеджером</span>
+          </button>
+        )}
       </div>
 
-      {/* Clean Filters Bar */}
-      <div className="bg-white rounded-3xl p-6 shadow-soft border border-slate-200/90 space-y-5">
-        
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      {/* Reference Filter Bar: Warm Panel with 2px Border */}
+      <div className="bg-[#FAF8F2] rounded-2xl border-2 border-zinc-900 p-5 sm:p-6 space-y-4 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-300 pb-3">
           <div className="flex items-center gap-2">
-            <SlidersHorizontal className="w-4 h-4 text-dsk-600" />
-            <h2 className="text-sm font-bold text-slate-900">Фильтры подбора</h2>
-            <span className="text-xs text-slate-400">
-              (Найдено: <strong className="text-slate-700">{filteredApartments.length}</strong> из {apartments.length})
+            <SlidersHorizontal className="w-4 h-4 text-zinc-900" />
+            <h2 className="text-sm font-bold text-zinc-900 uppercase tracking-wide">Параметры поиска</h2>
+            <span className="text-xs text-zinc-500 font-medium">
+              (доступно: <strong className="text-zinc-900">{filteredApartments.length}</strong>)
             </span>
           </div>
 
@@ -124,31 +198,30 @@ export const ApartmentsPage: React.FC = () => {
             onClick={() => {
               setSelectedComplexId('all');
               setSelectedRooms('all');
-              setSelectedFinishing('all');
+              setMinPrice(0);
               setMaxPrice(15000000);
-              setOnlyFree(true);
+              setMinArea(0);
+              setMaxArea(150);
             }}
-            className="text-xs text-slate-400 hover:text-slate-600 font-medium flex items-center gap-1 transition-colors"
+            className="text-xs text-zinc-600 hover:text-zinc-900 font-bold flex items-center gap-1 cursor-pointer transition-colors"
           >
             <X className="w-3.5 h-3.5" />
             Сбросить фильтры
           </button>
         </div>
 
-        {/* Filter Controls Grid */}
+        {/* Filter Inputs Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
-          {/* Complex Filter */}
+          {/* Residential Complex Filter */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5 uppercase tracking-wider">
               Жилой комплекс
             </label>
             <select
               value={selectedComplexId}
-              onChange={(e) =>
-                setSelectedComplexId(e.target.value === 'all' ? 'all' : Number(e.target.value))
-              }
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-dsk-500"
+              onChange={(e) => setSelectedComplexId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              className="w-full h-10 px-3 bg-white border-2 border-zinc-900 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none"
             >
               <option value="all">Все жилые комплексы</option>
               {complexes.map((c) => (
@@ -161,7 +234,7 @@ export const ApartmentsPage: React.FC = () => {
 
           {/* Rooms Filter */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5 uppercase tracking-wider">
               Количество комнат
             </label>
             <div className="flex items-center gap-1.5">
@@ -174,10 +247,10 @@ export const ApartmentsPage: React.FC = () => {
                 <button
                   key={r.value.toString()}
                   onClick={() => setSelectedRooms(r.value as any)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                  className={`flex-1 h-10 text-xs font-bold rounded-xl border-2 transition-all cursor-pointer ${
                     selectedRooms === r.value
-                      ? 'bg-dsk-600 border-dsk-600 text-white shadow-sm shadow-dsk-600/20'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      ? 'bg-zinc-900 border-zinc-900 text-white'
+                      : 'bg-white border-zinc-900 text-zinc-900 hover:bg-zinc-100'
                   }`}
                 >
                   {r.label}
@@ -186,81 +259,84 @@ export const ApartmentsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Finishing Type Filter */}
+          {/* Price Range Filters (От and До) */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Тип отделки
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5 uppercase tracking-wider">
+              Цена, ₽
             </label>
-            <select
-              value={selectedFinishing}
-              onChange={(e) => setSelectedFinishing(e.target.value as any)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:border-dsk-500"
-            >
-              <option value="all">Любая отделка</option>
-              <option value="turnkey">Чистовая (под ключ)</option>
-              <option value="white_box">White box (предчистовая)</option>
-              <option value="rough">Черновая</option>
-            </select>
-          </div>
-
-          {/* Max Price Filter */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-slate-700">
-                Цена до:
-              </label>
-              <span className="text-xs font-bold text-dsk-700">
-                {formatPrice(maxPrice)}
-              </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                placeholder="от 0"
+                step="100000"
+                value={minPrice || ''}
+                onChange={(e) => setMinPrice(Number(e.target.value) || 0)}
+                className="w-1/2 h-10 px-3 bg-white border-2 border-zinc-900 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none placeholder-zinc-400"
+              />
+              <span className="text-zinc-900 font-bold text-xs">—</span>
+              <input
+                type="number"
+                placeholder="до 15 млн"
+                step="500000"
+                value={maxPrice || ''}
+                onChange={(e) => setMaxPrice(Number(e.target.value) || 0)}
+                className="w-1/2 h-10 px-3 bg-white border-2 border-zinc-900 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none placeholder-zinc-400"
+              />
             </div>
-            <input
-              type="range"
-              min={4000000}
-              max={15000000}
-              step={500000}
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(Number(e.target.value))}
-              className="w-full accent-dsk-600 cursor-pointer"
-            />
           </div>
 
-        </div>
+          {/* Area Range Filters (От and До) */}
+          <div>
+            <label className="block text-xs font-bold text-zinc-800 mb-1.5 uppercase tracking-wider">
+              Площадь, м²
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                placeholder="от 20"
+                step="5"
+                value={minArea || ''}
+                onChange={(e) => setMinArea(Number(e.target.value) || 0)}
+                className="w-1/2 h-10 px-3 bg-white border-2 border-zinc-900 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none placeholder-zinc-400"
+              />
+              <span className="text-zinc-900 font-bold text-xs">—</span>
+              <input
+                type="number"
+                placeholder="до 150"
+                step="5"
+                value={maxArea || ''}
+                onChange={(e) => setMaxArea(Number(e.target.value) || 0)}
+                className="w-1/2 h-10 px-3 bg-white border-2 border-zinc-900 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none placeholder-zinc-400"
+              />
+            </div>
+          </div>
 
-        {/* Free only toggle */}
-        <div className="pt-2 flex items-center gap-2">
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={onlyFree}
-              onChange={(e) => setOnlyFree(e.target.checked)}
-              className="w-4 h-4 rounded text-dsk-600 focus:ring-dsk-500 rounded border-slate-300"
-            />
-            Только свободные для покупки квартиры
-          </label>
         </div>
 
       </div>
 
-      {/* Apartments Grid */}
+      {/* Apartments Vertical List */}
       {loading ? (
-        <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-3">
-          <RefreshCw className="w-8 h-8 animate-spin text-dsk-600" />
-          <p className="text-sm font-medium">Загрузка актуального каталога квартир...</p>
+        <div className="py-16 text-center text-zinc-500 flex flex-col items-center gap-2">
+          <RefreshCw className="w-6 h-6 animate-spin text-zinc-900" />
+          <p className="text-xs font-bold uppercase tracking-wider">Загрузка каталога квартир...</p>
         </div>
       ) : filteredApartments.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 text-slate-400 space-y-2">
-          <Building2 className="w-12 h-12 mx-auto text-slate-300" />
-          <h3 className="text-base font-bold text-slate-700">Квартир по заданным параметрам не найдено</h3>
-          <p className="text-xs text-slate-400">Попробуйте изменить параметры комнатности или увеличить бюджет.</p>
+        <div className="p-12 text-center bg-white rounded-2xl border-2 border-zinc-900 text-zinc-600 space-y-2">
+          <Building2 className="w-10 h-10 mx-auto text-zinc-400" />
+          <h3 className="text-base font-bold text-zinc-900">Доступных квартир по заданным параметрам не найдено</h3>
+          <p className="text-xs text-zinc-500">Попробуйте расширить диапазон цен или изменить параметры комнатности.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-4">
           {filteredApartments.map((apt) => (
             <ApartmentCard
               key={apt.id}
               apartment={apt}
-              onSelect={(a) => setActiveApartment(a)}
-              onContact={(a) => handleContactManager(a)}
+              existingSessionId={userSessionsMap[apt.id]}
+              onSelect={handleSelectApartment}
+              onContact={isStaff ? undefined : handleContactManager}
+              onGoToChat={handleGoToChat}
             />
           ))}
         </div>
@@ -270,8 +346,10 @@ export const ApartmentsPage: React.FC = () => {
       {activeApartment && (
         <ApartmentModal
           apartment={activeApartment}
-          onClose={() => setActiveApartment(null)}
-          onContact={(a) => handleContactManager(a)}
+          existingSessionId={userSessionsMap[activeApartment.id]}
+          onClose={handleCloseModal}
+          onContact={isStaff ? undefined : handleContactManager}
+          onGoToChat={handleGoToChat}
         />
       )}
 

@@ -63,6 +63,8 @@ func main() {
 	chatService := service.NewChatService(chatRepo)
 	chatHandler := handler.NewChatHandler(chatService)
 
+	dealService.SetNotificationDependencies(notificationRepo, userRepo, chatRepo, emailSender)
+
 	dialogAnalysisService := service.NewDialogAnalysisService(dealRepo, chatRepo)
 	competitorRepo := repository.NewCompetitorRepository(dbpool)
 	competitorHandler := handler.NewCompetitorHandler(competitorRepo)

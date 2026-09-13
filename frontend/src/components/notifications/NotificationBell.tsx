@@ -74,13 +74,13 @@ export const NotificationBell: React.FC = () => {
   const getIcon = (type: Notification['type']) => {
     switch (type) {
       case 'construction_delay':
-        return <Clock className="w-4 h-4 text-amber-500" />;
+        return <Clock className="w-3.5 h-3.5 text-zinc-900" />;
       case 'construction_risk':
-        return <AlertTriangle className="w-4 h-4 text-rose-500" />;
+        return <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />;
       case 'deal_update':
-        return <FileText className="w-4 h-4 text-dsk-600" />;
+        return <FileText className="w-3.5 h-3.5 text-zinc-900" />;
       default:
-        return <Info className="w-4 h-4 text-slate-500" />;
+        return <Info className="w-3.5 h-3.5 text-zinc-900" />;
     }
   };
 
@@ -88,25 +88,25 @@ export const NotificationBell: React.FC = () => {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors focus:outline-none"
+        className="relative w-8 h-8 rounded-xl border border-zinc-300 hover:border-zinc-900 hover:bg-[#FAF8F2] flex items-center justify-center text-zinc-600 hover:text-zinc-900 transition-colors cursor-pointer"
         title="Уведомления"
       >
-        <Bell className="w-5 h-5" />
+        <Bell className="w-3.5 h-3.5" />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[11px] font-bold text-white bg-rose-500 rounded-full animate-pulse">
+          <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 text-[9px] font-extrabold text-white bg-zinc-900 rounded-full border border-white">
             {unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-premium border border-slate-100 py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between px-4 pb-2 border-b border-slate-100">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl border-2 border-zinc-900 p-4 shadow-xl z-50">
+          <div className="flex items-center justify-between pb-3 border-b border-zinc-200">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-slate-900 text-sm">Уведомления</h3>
+              <h3 className="font-extrabold text-zinc-900 uppercase text-xs tracking-wider">Уведомления</h3>
               {unreadCount > 0 && (
-                <span className="text-xs bg-dsk-50 text-dsk-700 font-medium px-2 py-0.5 rounded-full">
-                  {unreadCount} новых
+                <span className="px-2 py-0.2 rounded-full text-[10px] font-extrabold bg-[#FEF7EE] text-amber-950 border border-zinc-900">
+                  +{unreadCount}
                 </span>
               )}
             </div>
@@ -114,17 +114,17 @@ export const NotificationBell: React.FC = () => {
               <button
                 onClick={handleMarkAllRead}
                 disabled={loading}
-                className="text-xs text-dsk-600 hover:text-dsk-800 font-medium flex items-center gap-1 transition-colors"
+                className="text-[11px] text-zinc-700 hover:text-zinc-900 hover:underline font-bold flex items-center gap-1 cursor-pointer"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
-                Прочитать все
+                Все прочитаны
               </button>
             )}
           </div>
 
-          <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-50">
+          <div className="max-h-[360px] overflow-y-auto space-y-2 mt-3 pr-1">
             {notifications.length === 0 ? (
-              <div className="py-8 text-center text-slate-400 text-sm">
+              <div className="py-6 text-center text-zinc-500 font-medium text-xs">
                 Нет новых уведомлений
               </div>
             ) : (
@@ -132,25 +132,19 @@ export const NotificationBell: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={(e) => !item.is_read && handleMarkAsRead(item.id, e)}
-                  className={`p-3.5 hover:bg-slate-50 transition-colors cursor-pointer flex gap-3 ${
-                    !item.is_read ? 'bg-dsk-50/40' : ''
+                  className={`p-3 rounded-xl border transition-all cursor-pointer flex gap-3 ${
+                    !item.is_read ? 'bg-[#FAF8F2] border-zinc-900 shadow-xs' : 'bg-white border-zinc-200 hover:border-zinc-400'
                   }`}
                 >
-                  <div className="mt-0.5 p-1.5 rounded-lg bg-white shadow-sm border border-slate-100 shrink-0 h-fit">
+                  <div className="mt-0.5 p-1.5 bg-white border border-zinc-300 rounded-lg shrink-0 h-fit">
                     {getIcon(item.type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <p className="text-xs font-semibold text-slate-900 truncate">
-                        {item.title}
-                      </p>
-                      <span className="text-[10px] text-slate-400 shrink-0">
-                        {formatDateTime(item.created_at)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-600 leading-relaxed break-words">
-                      {item.message}
-                    </p>
+                    <p className="text-xs font-extrabold text-zinc-900 leading-tight">{item.title}</p>
+                    <p className="text-[11px] text-zinc-600 mt-1 leading-snug">{item.message}</p>
+                    <span className="text-[10px] text-zinc-400 font-semibold mt-1.5 block">
+                      {formatDateTime(item.created_at)}
+                    </span>
                   </div>
                 </div>
               ))

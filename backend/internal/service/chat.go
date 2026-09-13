@@ -21,6 +21,8 @@ type ChatService interface {
 	GetSessions(ctx context.Context, userID *int, employeeID *int, status *domain.ChatSessionStatus) ([]*domain.ChatSession, error)
 	TakeSession(ctx context.Context, sessionID int, employeeID int) error
 	CloseSession(ctx context.Context, sessionID int) error
+	UpdateSessionStatus(ctx context.Context, sessionID int, status domain.ChatSessionStatus) error
+	DeleteSessionForUser(ctx context.Context, sessionID int, userID int) error
 	RejectSession(ctx context.Context, sessionID int, employeeID int, reason string) (*domain.ChatSessionRejection, error)
 	SendMessage(ctx context.Context, sessionID int, userID *int, senderType string, content string) (*domain.Message, error)
 	GetMessages(ctx context.Context, sessionID int, currentUserID *int) ([]*domain.Message, error)
@@ -35,10 +37,25 @@ func NewChatService(chatRepo repository.ChatRepository) ChatService {
 }
 
 func (s *chatService) CreateSession(ctx context.Context, req domain.CreateChatSessionRequest, userID *int) (*domain.ChatSession, error) {
-	// If user is not authenticated, check that at least email or phone is provided
-	if userID == nil {
-		if strings.TrimSpace(req.GuestEmail) == "" && strings.TrimSpace(req.GuestPhone) == "" {
-			return nil, ErrInvalidSessionData
+	// If user is authenticated and creating a general session (without apartment), reuse existing one
+	if userID != nil && req.ApartmentID == nil {
+		existing, err := s.chatRepo.GetSessions(ctx, userID, nil, nil)
+		if err == nil {
+			for _, sess := range existing {
+				if sess.ApartmentID == nil && sess.Status != domain.ChatSessionStatusClose {
+					if strings.TrimSpace(req.Message) != "" {
+						msg := &domain.Message{
+							ChatSessionID: sess.ID,
+							UserID:        userID,
+							SenderType:    "client",
+							Content:       req.Message,
+							IsRead:        false,
+						}
+						_, _ = s.chatRepo.CreateMessage(ctx, msg)
+					}
+					return sess, nil
+				}
+			}
 		}
 	}
 
@@ -91,6 +108,14 @@ func (s *chatService) TakeSession(ctx context.Context, sessionID int, employeeID
 
 func (s *chatService) CloseSession(ctx context.Context, sessionID int) error {
 	return s.chatRepo.CloseSession(ctx, sessionID)
+}
+
+func (s *chatService) UpdateSessionStatus(ctx context.Context, sessionID int, status domain.ChatSessionStatus) error {
+	return s.chatRepo.UpdateSessionStatus(ctx, sessionID, status)
+}
+
+func (s *chatService) DeleteSessionForUser(ctx context.Context, sessionID int, userID int) error {
+	return s.chatRepo.DeleteSessionForUser(ctx, sessionID, userID)
 }
 
 func (s *chatService) RejectSession(ctx context.Context, sessionID int, employeeID int, reason string) (*domain.ChatSessionRejection, error) {

@@ -20,6 +20,8 @@ type ChatRepository interface {
 	GetSessions(ctx context.Context, userID *int, employeeID *int, status *domain.ChatSessionStatus) ([]*domain.ChatSession, error)
 	TakeSession(ctx context.Context, sessionID int, employeeID int) error
 	CloseSession(ctx context.Context, sessionID int) error
+	UpdateSessionStatus(ctx context.Context, sessionID int, status domain.ChatSessionStatus) error
+	DeleteSessionForUser(ctx context.Context, sessionID int, userID int) error
 	CreateRejection(ctx context.Context, rejection *domain.ChatSessionRejection) (*domain.ChatSessionRejection, error)
 	GetRejectionsBySessionID(ctx context.Context, sessionID int) ([]*domain.ChatSessionRejection, error)
 	CreateMessage(ctx context.Context, msg *domain.Message) (*domain.Message, error)
@@ -37,9 +39,9 @@ func NewChatRepository(db *pgxpool.Pool) ChatRepository {
 
 func (r *chatRepository) CreateSession(ctx context.Context, session *domain.ChatSession) (*domain.ChatSession, error) {
 	query := `
-		INSERT INTO chat_sessions (id_user, id_employee, id_apartment, guest_name, guest_email, guest_phone, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-		RETURNING id, id_user, id_employee, id_apartment, guest_name, guest_email, guest_phone, status, created_at, updated_at
+		INSERT INTO chat_sessions (id_user, id_employee, id_apartment, guest_name, guest_email, guest_phone, status, deleted_by_user, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, NOW(), NOW())
+		RETURNING id, id_user, id_employee, id_apartment, guest_name, guest_email, guest_phone, status, deleted_by_user, created_at, updated_at
 	`
 	var s domain.ChatSession
 	err := r.db.QueryRow(ctx, query,
@@ -59,6 +61,7 @@ func (r *chatRepository) CreateSession(ctx context.Context, session *domain.Chat
 		&s.GuestEmail,
 		&s.GuestPhone,
 		&s.Status,
+		&s.DeletedByUser,
 		&s.CreatedAt,
 		&s.UpdatedAt,
 	)
@@ -72,7 +75,7 @@ func (r *chatRepository) GetSessionByID(ctx context.Context, id int) (*domain.Ch
 	query := `
 		SELECT 
 			cs.id, cs.id_user, cs.id_employee, cs.id_apartment, 
-			cs.guest_name, cs.guest_email, cs.guest_phone, cs.status, 
+			cs.guest_name, cs.guest_email, cs.guest_phone, cs.status, cs.deleted_by_user,
 			cs.created_at, cs.updated_at,
 			u.name AS user_name,
 			e.name AS employee_name
@@ -91,6 +94,7 @@ func (r *chatRepository) GetSessionByID(ctx context.Context, id int) (*domain.Ch
 		&s.GuestEmail,
 		&s.GuestPhone,
 		&s.Status,
+		&s.DeletedByUser,
 		&s.CreatedAt,
 		&s.UpdatedAt,
 		&s.UserName,
@@ -109,14 +113,17 @@ func (r *chatRepository) GetSessions(ctx context.Context, userID *int, employeeI
 	query := `
 		SELECT 
 			cs.id, cs.id_user, cs.id_employee, cs.id_apartment, 
-			cs.guest_name, cs.guest_email, cs.guest_phone, cs.status, 
+			cs.guest_name, cs.guest_email, cs.guest_phone, cs.status, cs.deleted_by_user,
 			cs.created_at, cs.updated_at,
 			u.name AS user_name,
 			e.name AS employee_name
 		FROM chat_sessions cs
 		LEFT JOIN users u ON cs.id_user = u.id
 		LEFT JOIN users e ON cs.id_employee = e.id
-		WHERE ($1::int IS NULL OR cs.id_user = $1)
+		WHERE (CASE 
+				WHEN $1::int IS NOT NULL THEN cs.id_user = $1 AND cs.deleted_by_user = FALSE
+				ELSE NOT (cs.deleted_by_user = TRUE AND cs.id_employee IS NULL)
+			   END)
 		  AND ($2::int IS NULL OR cs.id_employee = $2)
 		  AND ($3::text IS NULL OR cs.status::text = $3)
 		ORDER BY cs.updated_at DESC
@@ -145,6 +152,7 @@ func (r *chatRepository) GetSessions(ctx context.Context, userID *int, employeeI
 			&s.GuestEmail,
 			&s.GuestPhone,
 			&s.Status,
+			&s.DeletedByUser,
 			&s.CreatedAt,
 			&s.UpdatedAt,
 			&s.UserName,
@@ -180,12 +188,32 @@ func (r *chatRepository) TakeSession(ctx context.Context, sessionID int, employe
 }
 
 func (r *chatRepository) CloseSession(ctx context.Context, sessionID int) error {
+	return r.UpdateSessionStatus(ctx, sessionID, domain.ChatSessionStatusClose)
+}
+
+func (r *chatRepository) UpdateSessionStatus(ctx context.Context, sessionID int, status domain.ChatSessionStatus) error {
 	query := `
 		UPDATE chat_sessions 
 		SET status = $1, updated_at = NOW() 
 		WHERE id = $2
 	`
-	cmdTag, err := r.db.Exec(ctx, query, domain.ChatSessionStatusClose, sessionID)
+	cmdTag, err := r.db.Exec(ctx, query, status, sessionID)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return ErrChatSessionNotFound
+	}
+	return nil
+}
+
+func (r *chatRepository) DeleteSessionForUser(ctx context.Context, sessionID int, userID int) error {
+	query := `
+		UPDATE chat_sessions
+		SET deleted_by_user = TRUE, updated_at = NOW()
+		WHERE id = $1 AND id_user = $2
+	`
+	cmdTag, err := r.db.Exec(ctx, query, sessionID, userID)
 	if err != nil {
 		return err
 	}

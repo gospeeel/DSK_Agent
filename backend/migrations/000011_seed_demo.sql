@@ -1,6 +1,5 @@
--- Чистая база данных: 3 ЖК, по 3 дома в каждом (д. 126/1, 126/2 и т.д.), 30 квартир суммарно.
--- Только сотрудники (manager, supervisor) без демонстрационных чатов и сделок.
--- Пароль для сотрудников: Demo123!
+-- Clean seed data: 3 residential complexes, 9 buildings, 30 apartments, ancillary units, discount policies and employees.
+-- No test chats, no test deals.
 
 BEGIN;
 
@@ -25,7 +24,7 @@ INSERT INTO residential_complexes (id, name, address, description) VALUES
     (2003, 'ЖК «Горизонт»', 'Воронеж, ул. Шишкова, 142', 'Новый современный квартал комфорт-класса от ДСК.')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, description = EXCLUDED.description;
 
--- Дома (3 ЖК по 3 дома с дробными номерами: 50/1, 50/2, 50/3)
+-- Дома (3 ЖК по 3 дома)
 INSERT INTO buildings (
     id, residential_complex_id, address, district, latitude, longitude, floors_count,
     planned_date, actual_date, status, type_wall_material,

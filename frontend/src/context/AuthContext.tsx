@@ -50,9 +50,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const u = await authApi.getStaffProfile();
         saveUser(u);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Failed to verify user session:', e);
-      // Keep user in state if temporary network error or clear if 401
+      // If database was reset or session is invalid (404 / 401), clear stale localStorage user
+      if (e?.status === 404 || e?.status === 401 || e?.message?.includes('user not found') || e?.message?.includes('unauthorized')) {
+        saveUser(null);
+      }
     } finally {
       setIsLoading(false);
     }

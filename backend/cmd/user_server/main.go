@@ -66,6 +66,13 @@ func main() {
 	chatService := service.NewChatService(chatRepo)
 	chatHandler := handler.NewChatHandler(chatService)
 
+	dealService.SetNotificationDependencies(notificationRepo, userRepo, chatRepo, emailSender)
+
+	aiService := service.NewAIAgentService(cfg.RabbitMQURL)
+	defer aiService.Close()
+	aiAuditRepo := repository.NewAIAuditRepository(dbpool)
+	aiHandler := handler.NewAIHandler(aiService, chatService, aiAuditRepo)
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(cors.Handler(cors.Options{
@@ -115,15 +122,20 @@ func main() {
 		// Client Chat routes
 		r.Get("/api/chat/sessions", chatHandler.GetMySessions)
 		r.Get("/api/chat/sessions/{id}", chatHandler.GetSession)
+		r.Delete("/api/chat/sessions/{id}", chatHandler.DeleteSession)
 		r.Get("/api/chat/sessions/{id}/messages", chatHandler.GetMessages)
 		r.Post("/api/chat/sessions/{id}/messages", chatHandler.SendMessage)
 
 		// Client Deals routes
 		r.Get("/api/deals", dealHandler.GetMyDeals)
 		r.Get("/api/deals/{id}", dealHandler.GetDeal)
+		r.Put("/api/deals/{id}/status", dealHandler.UpdateDealStatus)
 		r.Get("/api/offers", offerHandler.List)
 		r.Get("/api/offers/{id}", offerHandler.Get)
 		r.Get("/api/offers/{id}/pdf", offerHandler.PDF)
+
+		// Client AI Assistant
+		r.Post("/api/ai/chat", aiHandler.Chat)
 	})
 
 	log.Printf("Starting User Server on port %s", port)

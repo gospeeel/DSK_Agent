@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Building2, MessageSquare, User as UserIcon, LogOut, LogIn, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Building2, MessageSquare, User as UserIcon, LogOut, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationBell } from '../notifications/NotificationBell';
 
@@ -15,164 +15,141 @@ export const Navbar: React.FC = () => {
   };
 
   const isActive = (path: string) => location.pathname === path;
+  const isStaff = user?.role === 'manager' || user?.role === 'supervisor';
 
   return (
-    <header className="sticky top-0 z-40 glass-nav">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          
-          {/* Logo */}
-          <div className="flex items-center gap-8">
-            <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-dsk-700 to-dsk-500 flex items-center justify-center text-white shadow-md shadow-dsk-500/20 group-hover:scale-105 transition-transform">
-                <Building2 className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-lg tracking-tight text-slate-900">ДСК</span>
-                  <span className="text-xs px-1.5 py-0.5 rounded-md bg-dsk-50 text-dsk-700 font-semibold uppercase tracking-wider">
-                    Agent
-                  </span>
+    <>
+      <header className="sticky top-0 z-40 bg-[#F6F4EE]/90 backdrop-blur-md border-b-2 border-zinc-900 py-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white border-2 border-zinc-900 rounded-2xl px-4 sm:px-6 h-14 flex items-center justify-between shadow-xs">
+            
+            {/* Logo */}
+            <div className="flex items-center gap-6">
+              <Link to="/" className="flex items-center gap-2.5 group">
+                <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center text-white font-bold text-sm">
+                  <Building2 className="w-4 h-4" />
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium leading-none">Строительный портал</p>
-              </div>
-            </Link>
-
-            {/* Navigation links */}
-            <nav className="hidden md:flex items-center gap-1">
-              <Link
-                to="/apartments"
-                className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  isActive('/apartments') || isActive('/')
-                    ? 'bg-dsk-50 text-dsk-700 font-semibold'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                Квартиры в продаже
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold text-base tracking-tight text-zinc-900">ДСК</span>
+                </div>
               </Link>
 
-              {isAuthenticated && user?.role === 'user' && (
+              {/* Navigation links */}
+              <nav className="hidden md:flex items-center gap-1.5">
                 <Link
-                  to="/profile"
-                  className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    isActive('/profile')
-                      ? 'bg-dsk-50 text-dsk-700 font-semibold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  to="/apartments"
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                    isActive('/apartments') || isActive('/') || location.pathname.startsWith('/apartments')
+                      ? 'bg-zinc-900 text-white border-zinc-900'
+                      : 'text-zinc-700 hover:bg-[#FAF8F2] border-transparent hover:border-zinc-900'
                   }`}
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  Мои чаты и сделки
+                  Каталог квартир
                 </Link>
-              )}
 
-              {isAuthenticated && user?.role === 'manager' && (
-                <Link
-                  to="/manager"
-                  className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    isActive('/manager')
-                      ? 'bg-dsk-50 text-dsk-700 font-semibold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4 text-dsk-600" />
-                  Рабочее место менеджера
-                </Link>
-              )}
+                {isAuthenticated && user?.role === 'user' && (
+                  <Link
+                    to="/profile"
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                      isActive('/profile')
+                        ? 'bg-zinc-900 text-white border-zinc-900'
+                        : 'text-zinc-700 hover:bg-[#FAF8F2] border-transparent hover:border-zinc-900'
+                    }`}
+                  >
+                    Мои чаты и сделки
+                  </Link>
+                )}
 
-              {isAuthenticated && user?.role === 'supervisor' && (
+                {isAuthenticated && user?.role === 'manager' && (
+                  <Link
+                    to="/manager"
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                      isActive('/manager')
+                        ? 'bg-zinc-900 text-white border-zinc-900'
+                        : 'text-zinc-700 hover:bg-[#FAF8F2] border-transparent hover:border-zinc-900'
+                    }`}
+                  >
+                    Рабочее место менеджера
+                  </Link>
+                )}
+
+                {isAuthenticated && user?.role === 'supervisor' && (
+                  <>
+                    <Link
+                      to="/supervisor"
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        isActive('/supervisor')
+                          ? 'bg-zinc-900 text-white border-zinc-900'
+                          : 'text-zinc-700 hover:bg-[#FAF8F2] border-transparent hover:border-zinc-900'
+                      }`}
+                    >
+                      Обзор отдела
+                    </Link>
+                    <Link
+                      to="/supervisor/discounts"
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                        isActive('/supervisor/discounts')
+                          ? 'bg-zinc-900 text-white border-zinc-900'
+                          : 'text-zinc-700 hover:bg-[#FAF8F2] border-transparent hover:border-zinc-900'
+                      }`}
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      Матрица скидок
+                    </Link>
+                  </>
+                )}
+              </nav>
+            </div>
+
+            {/* Right Action Bar */}
+            <div className="flex items-center gap-2.5">
+
+              {isAuthenticated ? (
                 <>
-                  <Link
-                    to="/supervisor"
-                    className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                      isActive('/supervisor')
-                        ? 'bg-dsk-50 text-dsk-700 font-semibold'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
+                  <NotificationBell />
+
+                  {/* User Profile info */}
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-[#FAF8F2] border border-zinc-900 flex items-center justify-center font-bold text-xs text-zinc-900">
+                      {user?.name ? user.name.slice(0, 2).toUpperCase() : <UserIcon className="w-3.5 h-3.5" />}
+                    </div>
+                    <div className="hidden lg:block text-left">
+                      <p className="text-xs font-bold text-zinc-900 leading-tight truncate max-w-[130px]">
+                        {user?.name || user?.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Logout */}
+                  <button
+                    onClick={handleLogout}
+                    className="w-8 h-8 rounded-xl border border-zinc-300 hover:border-zinc-900 hover:bg-[#FAF8F2] flex items-center justify-center text-zinc-600 hover:text-zinc-900 transition-colors"
+                    title="Выйти из аккаунта"
                   >
-                    Обзор отдела
-                  </Link>
-                  <Link
-                    to="/supervisor/discounts"
-                    className={`px-3.5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                      isActive('/supervisor/discounts')
-                        ? 'bg-dsk-50 text-dsk-700 font-semibold'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <SlidersHorizontal className="w-4 h-4" />
-                    Матрица скидок
-                  </Link>
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
                 </>
-              )}
-            </nav>
-          </div>
-
-          {/* Right Action Bar */}
-          <div className="flex items-center gap-3">
-            {isAuthenticated ? (
-              <>
-                <NotificationBell />
-
-                {/* Role Badge */}
-                <span
-                  className={`hidden sm:inline-flex text-xs px-2.5 py-1 rounded-full font-medium border ${
-                    user?.role === 'supervisor'
-                      ? 'bg-purple-50 text-purple-700 border-purple-200'
-                      : user?.role === 'manager'
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}
-                >
-                  {user?.role === 'supervisor'
-                    ? 'Руководитель'
-                    : user?.role === 'manager'
-                    ? 'Менеджер'
-                    : 'Покупатель'}
-                </span>
-
-                {/* User Profile info */}
-                <div className="flex items-center gap-2 pl-1">
-                  <div className="w-9 h-9 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-700 font-semibold text-xs">
-                    {user?.name ? user.name.slice(0, 2).toUpperCase() : <UserIcon className="w-4 h-4" />}
-                  </div>
-                  <div className="hidden lg:block text-left">
-                    <p className="text-xs font-semibold text-slate-900 leading-tight truncate max-w-[130px]">
-                      {user?.name || user?.email}
-                    </p>
-                    <p className="text-[10px] text-slate-400 capitalize">{user?.role}</p>
-                  </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Link
+                    to="/login"
+                    className="px-3 py-1.5 text-xs font-bold text-zinc-800 hover:bg-[#FAF8F2] border border-transparent hover:border-zinc-900 rounded-xl transition-colors"
+                  >
+                    Войти
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-xl border border-zinc-900 transition-colors"
+                  >
+                    Регистрация
+                  </Link>
                 </div>
+              )}
+            </div>
 
-                {/* Logout */}
-                <button
-                  onClick={handleLogout}
-                  className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                  title="Выйти из аккаунта"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/login"
-                  className="px-4 py-2 rounded-xl text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors flex items-center gap-1.5"
-                >
-                  <LogIn className="w-4 h-4" />
-                  Войти
-                </Link>
-                <Link
-                  to="/register"
-                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-dsk-600 hover:bg-dsk-700 transition-colors shadow-sm shadow-dsk-600/20"
-                >
-                  Регистрация
-                </Link>
-              </div>
-            )}
           </div>
-
         </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 };

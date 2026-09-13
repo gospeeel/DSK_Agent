@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { SlidersHorizontal, Plus, Building2, CheckCircle2, ShieldCheck, ArrowLeft, RefreshCw, Layers } from 'lucide-react';
+import { SlidersHorizontal, Plus, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Building, DiscountPolicy, ResidentialComplex } from '../types';
 import { apartmentsApi } from '../api/apartments';
 import { discountsApi } from '../api/discounts';
@@ -59,40 +59,40 @@ export const SupervisorDiscountsPage: React.FC = () => {
   const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
       {/* Header with back link */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <Link
             to="/supervisor"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 mb-2"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 mb-2 uppercase tracking-wider"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            Назад к общему дашборду
+            Назад в дашборд
           </Link>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <SlidersHorizontal className="w-6 h-6 text-purple-600" />
+          <h1 className="text-2xl font-extrabold text-zinc-900 flex items-center gap-2">
+            <SlidersHorizontal className="w-6 h-6 text-zinc-900" />
             Управление матрицей скидок
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-zinc-500 font-medium mt-0.5">
             Установка предельных лимитов скидок для менеджеров и руководителей по корпусам
           </p>
         </div>
 
         <button
           onClick={() => setShowModal(true)}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors shadow-md shadow-purple-600/20 flex items-center gap-1.5"
+          className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 border-2 border-zinc-900 transition-all cursor-pointer shadow-xs"
         >
           <Plus className="w-4 h-4" />
-          Новая версия политики скидок
+          Новая версия политики
         </button>
       </div>
 
       {/* Building Selector Bar */}
-      <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-soft">
-        <label className="block text-xs font-bold text-slate-700 mb-2">
-          Выберите объект / корпус для просмотра истории матрицы:
+      <div className="bg-[#FAF8F2] p-5 rounded-3xl border-2 border-zinc-900 space-y-3 shadow-xs">
+        <label className="block text-xs font-extrabold text-zinc-900 uppercase tracking-wider">
+          Выберите объект / корпус:
         </label>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -102,19 +102,21 @@ export const SupervisorDiscountsPage: React.FC = () => {
               <button
                 key={b.id}
                 onClick={() => setSelectedBuildingId(b.id)}
-                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-purple-50/70 border-purple-400 shadow-sm'
-                    : 'bg-slate-50 border-slate-200/80 hover:bg-slate-100/70'
+                    ? 'bg-zinc-900 border-zinc-900 text-white shadow-xs'
+                    : 'bg-white border-zinc-900 text-zinc-900 hover:bg-zinc-100'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-900 truncate">{b.address}</span>
-                  <span className="text-[10px] text-purple-700 font-bold px-1.5 py-0.5 bg-purple-100 rounded-md">
+                  <span className="text-xs font-extrabold truncate">{b.address}</span>
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                    isSelected ? 'bg-zinc-800 text-zinc-200 border-zinc-700' : 'bg-[#FAF8F2] text-zinc-900 border-zinc-900'
+                  }`}>
                     ID {b.id}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 truncate">
+                <p className={`text-[11px] font-medium truncate ${isSelected ? 'text-zinc-300' : 'text-zinc-500'}`}>
                   р-н {b.district} • {b.floors_count} этажей
                 </p>
               </button>
@@ -124,72 +126,66 @@ export const SupervisorDiscountsPage: React.FC = () => {
       </div>
 
       {/* Policies History & Active Matrix */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-5">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div className="bg-white p-6 rounded-3xl border-2 border-zinc-900 space-y-4 shadow-xs">
+        <div className="flex items-center justify-between border-b border-zinc-300 pb-2">
           <div>
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-extrabold text-zinc-900">
               Политики скидок: {selectedBuilding?.address || 'Корпус'}
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-zinc-500 font-medium">
               Серверная история версий и действующие ограничения
             </p>
           </div>
-          <span className="text-xs font-semibold text-slate-500">
-            {policies.length} версий зарегистрировано
+          <span className="text-xs text-zinc-900 font-extrabold">
+            {policies.length} версий
           </span>
         </div>
 
         {loadingPolicies ? (
-          <div className="py-12 text-center text-slate-400">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto text-purple-600 mb-2" />
-            <p className="text-xs">Загрузка матрицы...</p>
+          <div className="py-8 text-center text-zinc-400">
+            <RefreshCw className="w-5 h-5 animate-spin mx-auto text-zinc-900 mb-2" />
+            <p className="text-xs font-bold uppercase tracking-wider">Загрузка матрицы...</p>
           </div>
         ) : policies.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-            <p className="text-xs font-semibold text-slate-600">Для данного корпуса действуют стандартные настройки системы</p>
-            <p className="text-[11px] text-slate-400">Нажмите «Новая версия политики скидок», чтобы задать индивидуальные лимиты.</p>
+          <div className="py-8 text-center text-zinc-500 bg-[#FAF8F2] rounded-2xl border-2 border-zinc-900 space-y-1">
+            <p className="text-xs font-extrabold text-zinc-900">Для данного корпуса действуют стандартные настройки</p>
+            <p className="text-[11px] text-zinc-500 font-medium">Нажмите «Новая версия политики», чтобы задать индивидуальные лимиты.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto rounded-2xl border-2 border-zinc-900">
+            <table className="w-full text-left text-xs border-collapse bg-white">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-400 font-semibold">
-                  <th className="py-3 px-3">Версия</th>
-                  <th className="py-3 px-3">Роль</th>
-                  <th className="py-3 px-3">Макс. скидка</th>
-                  <th className="py-3 px-3">Действует с</th>
-                  <th className="py-3 px-3">Действует по</th>
-                  <th className="py-3 px-3">Статус</th>
+                <tr className="border-b-2 border-zinc-900 bg-[#FAF8F2] text-zinc-900 font-extrabold uppercase tracking-wider text-[10px]">
+                  <th className="py-3 px-4">Версия</th>
+                  <th className="py-3 px-4">Роль</th>
+                  <th className="py-3 px-4">Макс. скидка</th>
+                  <th className="py-3 px-4">Действует с</th>
+                  <th className="py-3 px-4">Действует по</th>
+                  <th className="py-3 px-4">Статус</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
+              <tbody className="divide-y divide-zinc-200 font-semibold text-zinc-800">
                 {policies.map((pol) => {
                   const isActive = !pol.valid_to;
                   return (
-                    <tr key={pol.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-3 font-bold text-slate-900">v{pol.version} (ID: {pol.id})</td>
-                      <td className="py-3 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            pol.role === 'supervisor'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }`}
-                        >
+                    <tr key={pol.id} className="hover:bg-[#FAF8F2]/60 transition-colors">
+                      <td className="py-3 px-4 font-extrabold text-zinc-900">v{pol.version} (ID: {pol.id})</td>
+                      <td className="py-3 px-4">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FAF8F2] border border-zinc-900 text-zinc-900">
                           {pol.role === 'supervisor' ? 'Руководитель' : 'Менеджер'}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-sm font-extrabold text-slate-900">
+                      <td className="py-3 px-4 text-sm font-extrabold text-zinc-900">
                         {pol.max_discount_percent}%
                       </td>
-                      <td className="py-3 px-3 text-slate-600">{formatDate(pol.valid_from)}</td>
-                      <td className="py-3 px-3 text-slate-400">{pol.valid_to ? formatDate(pol.valid_to) : 'Бессрочно'}</td>
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-4 text-zinc-700">{formatDate(pol.valid_from)}</td>
+                      <td className="py-3 px-4 text-zinc-400">{pol.valid_to ? formatDate(pol.valid_to) : 'Бессрочно'}</td>
+                      <td className="py-3 px-4">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
                             isActive
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                              : 'bg-slate-100 text-slate-500'
+                              ? 'bg-[#EBF7EE] text-emerald-900 border-zinc-900'
+                              : 'bg-zinc-100 text-zinc-700 border-zinc-900'
                           }`}
                         >
                           {isActive ? 'Действующая' : 'Архивная'}

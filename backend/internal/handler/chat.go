@@ -41,8 +41,19 @@ func canReadSession(user *domain.User, session *domain.ChatSession) bool {
 }
 
 func canManageSession(user *domain.User, session *domain.ChatSession) bool {
-	return user != nil && session != nil && (user.Role == domain.RoleSupervisor ||
-		(user.Role == domain.RoleManager && session.EmployeeID != nil && *session.EmployeeID == user.ID))
+	if user == nil || session == nil {
+		return false
+	}
+	if user.Role == domain.RoleSupervisor {
+		return true
+	}
+	if user.Role == domain.RoleManager {
+		if session.ApartmentID == nil {
+			return true
+		}
+		return session.EmployeeID != nil && *session.EmployeeID == user.ID
+	}
+	return false
 }
 
 func (h *ChatHandler) findAuthorizedSession(w http.ResponseWriter, r *http.Request, id int, manage bool) (*domain.ChatSession, bool) {
@@ -161,6 +172,10 @@ func (h *ChatHandler) TakeSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	if session.ApartmentID == nil {
+		http.Error(w, "general questions do not require taking into work", http.StatusBadRequest)
+		return
+	}
 	if session.EmployeeID != nil {
 		http.Error(w, "session is already assigned", http.StatusConflict)
 		return
@@ -276,3 +291,23 @@ func (h *ChatHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(messages)
 }
+
+func (h *ChatHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid session id", http.StatusBadRequest)
+		return
+	}
+	user := requestUser(r)
+	if user == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if err := h.chatService.DeleteSessionForUser(r.Context(), id, user.ID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "session hidden successfully"})
+}
+

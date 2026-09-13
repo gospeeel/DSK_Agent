@@ -50,6 +50,10 @@ func (*fakeAIChatService) GetSessions(context.Context, *int, *int, *domain.ChatS
 }
 func (*fakeAIChatService) TakeSession(context.Context, int, int) error { return nil }
 func (*fakeAIChatService) CloseSession(context.Context, int) error     { return nil }
+func (*fakeAIChatService) UpdateSessionStatus(context.Context, int, domain.ChatSessionStatus) error {
+	return nil
+}
+func (*fakeAIChatService) DeleteSessionForUser(context.Context, int, int) error { return nil }
 func (*fakeAIChatService) RejectSession(context.Context, int, int, string) (*domain.ChatSessionRejection, error) {
 	return nil, nil
 }

@@ -68,7 +68,7 @@ export interface ConstructionProgress {
   delay_days?: number;
 }
 
-export type ChatSessionStatus = 'open' | 'in_progress' | 'close';
+export type ChatSessionStatus = 'open' | 'in_progress' | 'pending_approval' | 'contract' | 'close';
 export type SenderType = 'client' | 'manager' | 'system' | 'ai';
 
 export interface ChatSession {
@@ -80,8 +80,11 @@ export interface ChatSession {
   guest_email?: string;
   guest_phone?: string;
   status: ChatSessionStatus;
+  deleted_by_user?: boolean;
   created_at: string;
   updated_at: string;
+  user_name?: string;
+  employee_name?: string;
   // Joined details
   apartment?: Apartment;
   user?: User;
@@ -95,6 +98,7 @@ export interface Message {
   content: string;
   is_read: boolean;
   sended_at: string;
+  sender_name?: string;
 }
 
 export type DealStatus = 'pending' | 'contract' | 'completed' | 'cancelled';
@@ -168,9 +172,27 @@ export interface DiscountPolicy {
   created_at: string;
 }
 
+export interface ClientFacts {
+  budget_min?: number;
+  budget_max?: number;
+  rooms?: number;
+  floor_min?: number;
+  floor_max?: number;
+  parking_required?: boolean;
+  renovation_required?: boolean;
+  preferred_district?: string;
+  purchase_timeline?: string;
+  important_factors?: string[];
+  objections?: string[];
+  summary: string;
+}
+
 export interface DialogAnalysisResult {
   deal_id: number;
-  summary: string;
+  client_id?: number;
+  analysis?: ClientFacts;
+  preferences_updated?: boolean;
+  summary?: string;
   client_needs?: {
     rooms?: number;
     budget_max?: number;
@@ -183,11 +205,13 @@ export interface DialogAnalysisResult {
 
 export interface ReplyAssistResult {
   deal_id: number;
+  source?: string;
   suggested_reply: string;
-  analysis: {
-    intent: string;
-    tone: string;
-    key_points: string[];
+  analysis?: {
+    intent?: string;
+    summary?: string;
+    tone?: string;
+    key_points?: string[];
   };
 }
 
@@ -196,3 +220,4 @@ export interface AIChatResponse {
   agent?: string;
   intent?: string;
 }
+

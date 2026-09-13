@@ -193,7 +193,7 @@ class AnalyticsAgent:
         ):
             raise ValueError(f"Unsupported analytics intent: {intent}")
         if intent == "extract_client_facts":
-            return await self._extract_client_facts(deal_id)
+            return await self._extract_client_facts(deal_id, message)
         if deal_id is None:
             return MISSING_DEAL_RESPONSE
 
@@ -285,8 +285,18 @@ class AnalyticsAgent:
             system_prompt=CONSTRUCTION_DELAY_SYSTEM_PROMPT,
         )
 
-    async def _extract_client_facts(self, deal_id: int | None) -> str:
+    async def _extract_client_facts(
+        self,
+        deal_id: int | None,
+        message: str = "",
+    ) -> str:
         if deal_id is None:
+            if message and any(k in message for k in ("Клиент:", "клиент:", "Менеджер:", "переписк", "диалог")):
+                try:
+                    facts = await self._extract_structured_client_facts(message)
+                    return self._format_client_facts(facts)
+                except Exception as exc:
+                    logger.warning("Direct client facts extraction failed: %s", exc)
             return CLIENT_FACTS_MISSING_DEAL_RESPONSE
 
         try:
