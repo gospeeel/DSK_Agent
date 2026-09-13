@@ -23,7 +23,11 @@ export default defineConfig(({ mode }) => {
   return {
     server: { proxy },
     preview: { proxy },
-    plugins: [vue(), tailwindcss(), vueDevTools()],
+    plugins: [
+      vue(),
+      tailwindcss(),
+      ...(env.VITE_ENABLE_DEVTOOLS === 'true' ? [vueDevTools()] : []),
+    ],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

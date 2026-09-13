@@ -9,6 +9,7 @@ const props = defineProps<{
   apartments: Apartment[]
   selectedApartmentId: string
   zoom: number
+  allowUnavailableSelection?: boolean
 }>()
 
 const emit = defineEmits<{ select: [apartmentId: string] }>()
@@ -32,8 +33,11 @@ const regionStrokeClass = (apartment: Apartment | undefined) =>
 const regionTextClass = (apartment: Apartment | undefined) =>
   apartment?.status === 'sold' ? 'fill-[#49585d]' : 'fill-[#34474f]'
 
+const canSelect = (apartment: Apartment | undefined) =>
+  !!apartment && (apartment.status === 'available' || props.allowUnavailableSelection)
+
 const select = (apartment: Apartment | undefined) => {
-  if (apartment?.status === 'available') emit('select', apartment.id)
+  if (canSelect(apartment)) emit('select', apartment!.id)
 }
 
 const openingTransform = (opening: PlanOpening) =>
@@ -140,9 +144,9 @@ const coreGeometry = computed(() => {
         v-for="region in plan.regions"
         :key="region.apartmentId"
         class="group outline-none"
-        :class="apartmentFor(region.apartmentId)?.status === 'available' ? 'cursor-pointer' : ''"
-        :role="apartmentFor(region.apartmentId)?.status === 'available' ? 'button' : 'img'"
-        :tabindex="apartmentFor(region.apartmentId)?.status === 'available' ? 0 : -1"
+        :class="canSelect(apartmentFor(region.apartmentId)) ? 'cursor-pointer' : ''"
+        :role="canSelect(apartmentFor(region.apartmentId)) ? 'button' : 'img'"
+        :tabindex="canSelect(apartmentFor(region.apartmentId)) ? 0 : -1"
         @click="select(apartmentFor(region.apartmentId))"
         @keydown.enter="select(apartmentFor(region.apartmentId))"
         @keydown.space.prevent="select(apartmentFor(region.apartmentId))"

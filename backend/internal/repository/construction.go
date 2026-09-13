@@ -258,7 +258,7 @@ func (r *postgresConstructionRepository) CreateProgress(ctx context.Context, p *
 }
 
 func (r *postgresConstructionRepository) GetProgressByID(ctx context.Context, id int) (*domain.ConstructionProgress, error) {
-	query := `SELECT id, building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, delay_reason, risk_level, delay_days FROM construction_progress WHERE id = $1`
+	query := `SELECT id, building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, COALESCE(delay_reason, ''), risk_level, delay_days FROM construction_progress WHERE id = $1`
 	var p domain.ConstructionProgress
 	err := r.db.QueryRow(ctx, query, id).Scan(&p.ID, &p.BuildingID, &p.StageName, &p.PlannedStartDate, &p.ActualStartDate, &p.PlannedEndDate, &p.ActualEndDate, &p.Status, &p.CompletionPercentage, &p.DelayReason, &p.RiskLevel, &p.DelayDays)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -268,7 +268,7 @@ func (r *postgresConstructionRepository) GetProgressByID(ctx context.Context, id
 }
 
 func (r *postgresConstructionRepository) GetProgressByBuildingID(ctx context.Context, buildingID int) ([]*domain.ConstructionProgress, error) {
-	query := `SELECT id, building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, delay_reason, risk_level, delay_days FROM construction_progress WHERE building_id = $1 ORDER BY COALESCE(planned_start_date, actual_start_date), id`
+	query := `SELECT id, building_id, stage_name, planned_start_date, actual_start_date, planned_end_date, actual_end_date, status, completion_percentage, COALESCE(delay_reason, ''), risk_level, delay_days FROM construction_progress WHERE building_id = $1 ORDER BY COALESCE(planned_start_date, actual_start_date), id`
 	rows, err := r.db.Query(ctx, query, buildingID)
 	if err != nil {
 		return nil, err

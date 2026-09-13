@@ -44,6 +44,16 @@ export const backendApi = {
       authRequest: true,
       body: JSON.stringify({ name, email, password }),
     }),
+  createStaff: (input: {
+    name: string
+    email: string
+    password: string
+    role: Extract<ApiUser['role'], 'manager' | 'supervisor'>
+  }) =>
+    apiRequest<ApiUser>('staff', '/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
   logout: (a: ApiAudience) => apiRequest(a, '/auth/logout', { method: 'POST', authRequest: true }),
   users: () => apiRequest<ApiUser[] | null>('staff', '/users').then(list),
   user: (id: number) => apiRequest<ApiUser>('staff', `/users/${apiId(id)}`),
@@ -83,10 +93,25 @@ export const backendApi = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  updateComplex: (complex: ApiComplex) =>
+    apiRequest<ApiComplex>('staff', `/complexes/${apiId(complex.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(complex),
+    }),
   updateBuilding: (building: ApiBuilding) =>
     apiRequest<ApiBuilding>('staff', `/buildings/${apiId(building.id)}`, {
       method: 'PUT',
       body: JSON.stringify(building),
+    }),
+  updateApartment: (apartment: ApiApartment) =>
+    apiRequest<ApiApartment>('staff', `/apartments/${apiId(apartment.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(apartment),
+    }),
+  updateProgress: (progress: ApiProgress) =>
+    apiRequest<ApiProgress>('staff', `/progress/${apiId(progress.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(progress),
     }),
   sessions: (a: ApiAudience) => apiRequest<ApiChatSession[] | null>(a, '/chat/sessions').then(list),
   createSession: (input: NewSession) =>
@@ -238,6 +263,11 @@ export const backendApi = {
     apiRequest<ApiAncillaryUnit>('staff', '/ancillary-units', {
       method: 'POST',
       body: JSON.stringify(input),
+    }),
+  updateAncillaryUnit: (unit: ApiAncillaryUnit) =>
+    apiRequest<ApiAncillaryUnit>('staff', `/ancillary-units/${apiId(unit.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(unit),
     }),
   erpSnapshot: (buildingId: number) =>
     apiRequest<ApiErpSnapshot>('staff', `/buildings/${apiId(buildingId)}/erp`),

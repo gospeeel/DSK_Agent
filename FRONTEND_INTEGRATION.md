@@ -24,7 +24,7 @@ Backend устанавливает HttpOnly cookie `token`; frontend испол�
 |---|---|
 | `user` | Собственные обращения, сообщения, сделки, утверждённые КП/PDF и уведомления; публичный каталог. |
 | `manager` | Свои сделки/клиенты/обращения и неназначенная очередь; создание каталожных и ERP-данных; КП и запрос согласования; свои напоминания. |
-| `supervisor` | Данные отдела, изменение каталога, согласование КП, версии матрицы скидок, назначение напоминаний сотрудникам. |
+| `supervisor` | Данные отдела, создание сотрудников, изменение каталога, согласование КП, версии матрицы скидок, назначение напоминаний сотрудникам. |
 
 AI-помощник — внутренний инструмент сотрудников. Клиентский интерфейс не показывает
 пункт AI и перенаправляет клиента с `/ai` в его рабочее пространство.
@@ -53,6 +53,7 @@ OpenAPI содержит 28 user API methods, не считая два Swagger r
 
 | Method | URL | Роль/назначение |
 |---|---|---|
+| POST | `/api/auth/register` | Supervisor создаёт менеджера или другого руководителя |
 | POST | `/api/ai/chat` | Внутренний AI-диалог сотрудника; клиентский API этот маршрут не предоставляет |
 | GET/POST | `/api/offers` | Реестр и новая версия КП |
 | POST | `/api/offers/calculate` | Авторитетный расчёт цены и допустимой скидки |
@@ -68,6 +69,7 @@ OpenAPI содержит 28 user API methods, не считая два Swagger r
 | POST | `/api/discount-policies` | Supervisor создаёт новую версию |
 | GET/POST | `/api/buildings/{buildingId}/ancillary-units`, `/api/ancillary-units` | Парковки/кладовые; создавать может staff |
 | PUT | `/api/ancillary-units/{id}` | Только supervisor |
+| PUT | `/api/complexes/{id}`, `/apartments/{id}`, `/progress/{id}` | Supervisor изменяет ЖК, квартиру или этап строительства |
 | GET | `/api/buildings/{buildingId}/erp` | ERP-сводка объекта |
 | POST | `/api/erp/events`, `/material-stocks`, `/production-schedules` | Ввод имитационных ERP-данных |
 | GET/POST | `/api/reminders` | Напоминания сотрудника; supervisor видит отдел |

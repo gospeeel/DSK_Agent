@@ -10,6 +10,7 @@ import {
 } from '@/widgets/backend-workspace'
 import { OffersWorkspace } from '@/widgets/offers-workspace'
 import { CompetitorWorkspace } from '@/widgets/competitor-workspace'
+import { TeamWorkspace } from '@/widgets/team-workspace'
 defineProps<{ screen: string; clientId?: string }>()
 </script>
 <template>
@@ -21,5 +22,5 @@ defineProps<{ screen: string; clientId?: string }>()
     v-else-if="screen === 'ai'"
   /><Profile v-else-if="screen === 'profile'" /><CompetitorWorkspace
     v-else-if="screen === 'competitors'"
-  /><OffersWorkspace v-else />
+  /><TeamWorkspace v-else-if="screen === 'team'" /><OffersWorkspace v-else />
 </template>

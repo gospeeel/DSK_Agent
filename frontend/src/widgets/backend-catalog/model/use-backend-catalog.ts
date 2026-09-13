@@ -100,6 +100,12 @@ export function useBackendCatalog(objectId: () => string | undefined) {
       })),
   )
   const selected = computed(() => apartments.value.find((a) => a.id === selectedId.value))
+  const selectedComplex = computed(() =>
+    complexes.data.value?.find((item) => item.id === complexId.value),
+  )
+  const selectedApiApartment = computed(() =>
+    units.data.value?.find((item) => String(item.id) === selectedId.value),
+  )
   watch(
     apartments,
     (items) => {
@@ -160,6 +166,8 @@ export function useBackendCatalog(objectId: () => string | undefined) {
     apartments,
     selectedId,
     selected,
+    selectedComplex,
+    selectedApiApartment,
     plan,
     zoom,
     view,

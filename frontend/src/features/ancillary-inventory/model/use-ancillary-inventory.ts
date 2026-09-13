@@ -23,6 +23,10 @@ export function useAncillaryInventory(buildingId: () => number, audience: () => 
       void queryClient.invalidateQueries({ queryKey: key.value })
     },
   })
+  const update = useMutation({
+    mutationFn: (unit: ApiAncillaryUnit) => backendApi.updateAncillaryUnit(unit),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key.value }),
+  })
   const available = computed(() => (units.data.value ?? []).filter((item) => item.status === 'free'))
-  return { units, available, draft, create }
+  return { units, available, draft, create, update }
 }

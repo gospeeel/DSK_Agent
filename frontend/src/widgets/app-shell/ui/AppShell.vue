@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Building2, FileText, LayoutDashboard, Menu, Users, X } from '@lucide/vue'
+import { Building2, FileText, LayoutDashboard, Menu, UserCog, Users, X } from '@lucide/vue'
 
 import { useWorkspaceStore } from '../model/workspace.store'
 import { LogoutButton, useSessionStore } from '@/features/auth-session'
@@ -25,6 +25,9 @@ const navigation = computed(() => [
   { label: 'Объекты', to: '/construction', icon: Building2 },
   ...(session.isStaff ? [{ label: 'AI-помощник', to: '/ai', icon: FileText }] : []),
   ...(session.isStaff ? [{ label: 'Анализ рынка', to: '/competitors', icon: Building2 }] : []),
+  ...(session.user?.role === 'supervisor'
+    ? [{ label: 'Команда', to: '/team', icon: UserCog }]
+    : []),
   ...(!session.isStaff ? [{ label: 'Профиль', to: '/profile', icon: Users }] : []),
 ])
 

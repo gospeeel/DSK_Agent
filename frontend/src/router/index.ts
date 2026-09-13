@@ -54,6 +54,12 @@ const router = createRouter({
       meta: { title: 'Анализ рынка', staff: true },
     },
     {
+      path: '/team',
+      component: connected,
+      props: { screen: 'team' },
+      meta: { title: 'Команда продаж', supervisor: true },
+    },
+    {
       path: '/profile',
       component: connected,
       props: { screen: 'profile' },
@@ -79,5 +85,6 @@ router.beforeEach(async (to) => {
   if (!session.isAuthenticated && !to.meta.public) return '/login'
   if (session.isAuthenticated && to.path === '/login') return '/'
   if ((to.meta.staff && !session.isStaff) || (to.meta.client && session.isStaff)) return '/'
+  if (to.meta.supervisor && session.user?.role !== 'supervisor') return '/'
 })
 export default router

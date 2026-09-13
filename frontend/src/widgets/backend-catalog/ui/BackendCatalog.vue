@@ -7,6 +7,7 @@ import { CreateCatalogEntry } from '@/features/create-catalog-entry'
 import { DiscountPolicyManager } from '@/features/manage-discount-policy'
 import { AncillaryInventory } from '@/features/ancillary-inventory'
 import { ErpSnapshot } from '@/features/erp-snapshot'
+import { ApartmentEditor, ComplexEditor, ProgressEditor } from '@/features/edit-catalog'
 import { useBackendCatalog } from '../model/use-backend-catalog'
 const props = defineProps<{ objectId?: string }>()
 const c = useBackendCatalog(() => props.objectId)
@@ -74,6 +75,11 @@ const stages = {
           </div>
         </div>
       </ApiState>
+      <ComplexEditor
+        v-if="!objectId && c.selectedComplex.value"
+        :complex="c.selectedComplex.value"
+        :role="c.session.user?.role"
+      />
       <ApiState
         v-if="c.buildingId.value !== null"
         :pending="c.building.isPending.value"
@@ -128,6 +134,7 @@ const stages = {
       :building-id="c.buildingId.value"
       :audience="c.session.audience"
       :can-create="c.session.isStaff"
+      :can-edit="c.session.user?.role === 'supervisor'"
     />
     <ErpSnapshot v-if="c.session.isStaff && c.buildingId.value" :building-id="c.buildingId.value" />
     <section
@@ -190,6 +197,7 @@ const stages = {
             :apartments="c.apartments.value"
             :selected-apartment-id="c.selectedId.value"
             :zoom="c.zoom.value"
+            :allow-unavailable-selection="c.session.isStaff"
             @select="c.selectedId.value = $event"
         /></template>
         <template v-else
@@ -202,7 +210,7 @@ const stages = {
               :key="apartment.id"
               class="flex w-full flex-wrap items-center justify-between gap-3 rounded p-4 text-left hover:bg-paper disabled:opacity-60"
               :class="c.selectedId.value === apartment.id ? 'bg-blueprint-soft' : ''"
-              :disabled="apartment.status !== 'available'"
+              :disabled="!c.session.isStaff && apartment.status !== 'available'"
               @click="c.selectedId.value = apartment.id"
             >
               <span
@@ -248,8 +256,13 @@ const stages = {
             </p>
           </form>
           <p v-else class="mt-3 text-sm text-muted">
-            Создание КП будет доступно после подключения расчёта и реестра предложений.
+            Используйте раздел «Сделки» для привязки клиента и раздел «Предложения» для подготовки КП.
           </p>
+          <ApartmentEditor
+            v-if="c.selectedApiApartment.value"
+            :apartment="c.selectedApiApartment.value"
+            :role="c.session.user?.role"
+          />
         </div>
       </ApiState>
     </section>
@@ -281,6 +294,7 @@ const stages = {
           <p v-if="step.delay_days != null" class="mt-2 text-sm text-muted">
             Задержка этапа: {{ step.delay_days }} дн.
           </p>
+          <ProgressEditor :progress="step" :role="c.session.user?.role" />
         </article></ApiState
       >
     </section>
