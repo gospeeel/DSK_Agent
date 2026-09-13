@@ -97,14 +97,18 @@ services:
     ports:
       - "8000:8000"
     environment:
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      RABBITMQ_EXCHANGE: app.topic
-      RABBITMQ_QUEUE: agent-service
-      RABBITMQ_ROUTING_KEY: agent.chat.request
+      APP_NAME: ${APP_NAME:-agent-service}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-app.topic}
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE:-agent-service}
+      RABBITMQ_ROUTING_KEY: ${RABBITMQ_ROUTING_KEY:-agent.chat.request}
+      RABBITMQ_PREFETCH_COUNT: ${RABBITMQ_PREFETCH_COUNT:-10}
       GIGACHAT_CREDENTIALS: ${GIGACHAT_CREDENTIALS:-replace-with-authorization-key}
       GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
       GIGACHAT_MODEL: ${GIGACHAT_MODEL:-GigaChat}
       GIGACHAT_VERIFY_SSL_CERTS: ${GIGACHAT_VERIFY_SSL_CERTS:-true}
+      GIGACHAT_TIMEOUT: ${GIGACHAT_TIMEOUT:-60}
     healthcheck:
       test:
         [

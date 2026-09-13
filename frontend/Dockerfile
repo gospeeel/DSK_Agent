@@ -1,21 +1,18 @@
-FROM node:24-alpine AS builder
-
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-RUN corepack enable && corepack install --global pnpm@10.7.1
-
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY package*.json ./
+RUN npm install
 
 COPY . .
-RUN pnpm build-only
+RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
