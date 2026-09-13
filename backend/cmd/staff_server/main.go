@@ -81,7 +81,7 @@ func main() {
 	}
 	offerDeliveryRepo := repository.NewOfferDeliveryRepository(dbpool)
 	offerDeliveryService := service.NewOfferDeliveryService(offerDeliveryRepo, dealRepo, userRepo, service.NewSMTPOfferAttachmentSender(cfg))
-	offerHandler := handler.NewOfferHandler(offerService, offerDeliveryService)
+	offerHandler := handler.NewOfferHandler(offerService, offerRepo, offerDeliveryService)
 
 	aiService := service.NewAIAgentService(cfg.RabbitMQURL)
 	defer aiService.Close()

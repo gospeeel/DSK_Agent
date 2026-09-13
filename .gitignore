@@ -2,7 +2,6 @@
 .codex/
 .impeccable/
 DESIGN.md
-PRODUCT.md
 DATABASE.md
 database/
 .env

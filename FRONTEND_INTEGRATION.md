@@ -58,7 +58,7 @@ OpenAPI содержит 28 user API methods, не считая два Swagger r
 | POST | `/api/offers/calculate` | Авторитетный расчёт цены и допустимой скидки |
 | POST | `/api/offers/{id}/approval-request` | Запрос согласования |
 | POST | `/api/offers/{id}/approve`, `/reject` | Только supervisor |
-| GET | `/api/offers/{id}/pdf` | PDF только согласованного КП; документ сохраняется |
+| GET | `/api/offers/{id}/pdf` | Полноценное русскоязычное PDF-КП только для согласованной версии; документ сохраняется |
 | POST | `/api/offers/{id}/send` | SMTP-отправка PDF-вложения и запись `sent/failed` |
 | POST | `/api/ai/dialog/analyze` | Приватное извлечение фактов и возражений |
 | POST | `/api/ai/dialog/reply-assist` | Приватный черновик ответа; автоматически клиенту не отправляется |
@@ -95,10 +95,15 @@ OpenAPI содержит 60 staff API methods, не считая два Swagger 
 Расчёт КП:
 
 ```json
-{ "deal_id": 7, "discount_percent": "4.5" }
+{
+  "deal_id": 7,
+  "discount_percent": "4.5",
+  "parking_unit_id": 41,
+  "storage_unit_id": 42
+}
 ```
 
-Ответ содержит `base_price`, `discount_amount`, `final_price`, `max_allowed_discount`, `requires_approval`. Frontend не повторяет формулу локально.
+Дополнительные ID необязательны. Backend принимает только свободные позиции нужного типа из того же корпуса, что и квартира. Ответ содержит `apartment_price`, снимки цен парковки/кладовой, общую `base_price`, `discount_amount`, `final_price`, `max_allowed_discount`, `requires_approval`. Скидка применяется к общей базе; frontend формулу локально не повторяет.
 
 Создание версии КП:
 
@@ -107,7 +112,9 @@ OpenAPI содержит 60 staff API methods, не считая два Swagger 
   "request_id": "uuid-or-idempotency-key",
   "deal_id": 7,
   "discount_percent": "4.5",
-  "generated_text": "Текст предложения"
+  "generated_text": "Текст предложения",
+  "parking_unit_id": 41,
+  "storage_unit_id": 42
 }
 ```
 
@@ -157,6 +164,10 @@ GET можно повторять стандартной политикой TanS
 - источники и актуальность в `competitors`;
 - `erp_events`, `material_stocks`, `production_schedules`;
 - `ai_audit_log`, `staff_reminders`.
+
+Миграция `000009_offer_ancillary_price_snapshot.sql` сохраняет цены выбранных парковки и кладовой непосредственно в версии КП. Поэтому повторная выгрузка PDF не меняется после обновления каталожных цен.
+
+PDF формируется сервером на основании сохранённой версии КП и связанных данных сделки. В документ входят клиент и менеджер, ЖК и корпус, характеристики квартиры, детерминированная векторная схема её функционального зонирования, парковка/кладовая, состав цены, скидка, итог и персональные условия. Кириллица обеспечивается встроенным Unicode-шрифтом. Если у корпуса есть сдвиг срока, PDF не публикует неподтверждённую точную дату и ссылается на условия ДДУ. Пока backend не хранит исходный архитектурный чертёж, схема явно помечена как немасштабная; её можно будет заменить реальным планом без изменения API скачивания.
 
 Связи остаются one-to-many. Отдельных many-to-many таблиц не добавлено.
 

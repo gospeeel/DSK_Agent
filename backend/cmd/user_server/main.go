@@ -49,7 +49,7 @@ func main() {
 	}
 	offerDeliveryRepo := repository.NewOfferDeliveryRepository(dbpool)
 	offerDeliveryService := service.NewOfferDeliveryService(offerDeliveryRepo, dealRepo, userRepo, service.NewSMTPOfferAttachmentSender(cfg))
-	offerHandler := handler.NewOfferHandler(offerService, offerDeliveryService)
+	offerHandler := handler.NewOfferHandler(offerService, offerRepo, offerDeliveryService)
 
 	emailSender := service.NewSMTPEmailSender(cfg)
 	notificationRepo := repository.NewNotificationRepository(dbpool)

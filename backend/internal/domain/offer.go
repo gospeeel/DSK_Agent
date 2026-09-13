@@ -78,3 +78,35 @@ type OfferCalculation struct {
 	MaxAllowedDiscount string  `json:"max_allowed_discount"`
 	RequiresApproval   bool    `json:"requires_approval"`
 }
+
+// OfferDocument contains the immutable commercial terms from Offer together
+// with the current descriptive data required to render a customer-facing PDF.
+// Prices of optional units stay on Offer as snapshots and are never read from
+// the mutable catalogue when the document is regenerated.
+type OfferDocument struct {
+	Offer *Offer
+
+	ClientName  string
+	ClientEmail string
+	ManagerName string
+
+	ApartmentID        int
+	ApartmentNumber    string
+	ApartmentRooms     int
+	ApartmentFloor     int
+	ApartmentArea      float64
+	ApartmentFinishing FinishingType
+
+	ComplexName       string
+	ComplexAddress    string
+	BuildingID        int
+	BuildingAddress   string
+	BuildingDistrict  string
+	ReadinessPercent  *int
+	PlannedDate       *time.Time
+	ForecastDate      *time.Time
+	DeliveryShiftDays *int
+
+	ParkingArea *float64
+	StorageArea *float64
+}

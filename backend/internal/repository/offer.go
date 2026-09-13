@@ -22,6 +22,7 @@ type OfferRepository interface {
 	List(ctx context.Context, createdBy *int) ([]*domain.Offer, error)
 	MarkPendingApproval(ctx context.Context, id int) (*domain.Offer, error)
 	Decide(ctx context.Context, id, supervisorID int, approve bool, reason string) (*domain.Offer, error)
+	GetDocument(ctx context.Context, id int) (*domain.OfferDocument, error)
 }
 
 type offerRepository struct {
@@ -128,6 +129,49 @@ func (r *offerRepository) GetByID(ctx context.Context, id int) (*domain.Offer, e
 		return nil, ErrOfferNotFound
 	}
 	return offer, err
+}
+
+func (r *offerRepository) GetDocument(ctx context.Context, id int) (*domain.OfferDocument, error) {
+	offer, err := r.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	document := &domain.OfferDocument{Offer: offer}
+	err = r.db.QueryRow(ctx, `
+		SELECT client.name, client.email, manager.name,
+		       apartment.id, apartment.number, apartment.rooms, apartment.floor,
+		       apartment.area, apartment.type_finishing,
+		       complex.name, complex.address,
+		       building.id, building.address, COALESCE(building.district, ''),
+		       building.readiness_percent, building.planned_date,
+		       building.forecast_date, building.delivery_shift_days,
+		       parking.area, storage.area
+		FROM offers o
+		JOIN deals deal ON deal.id = o.deal_id
+		JOIN users client ON client.id = deal.id_user
+		JOIN users manager ON manager.id = o.created_by
+		JOIN apartments apartment ON apartment.id = deal.id_apartment
+		JOIN buildings building ON building.id = apartment.building_id
+		JOIN residential_complexes complex ON complex.id = building.residential_complex_id
+		LEFT JOIN ancillary_units parking ON parking.id = o.parking_unit_id
+		LEFT JOIN ancillary_units storage ON storage.id = o.storage_unit_id
+		WHERE o.id = $1
+	`, id).Scan(
+		&document.ClientName, &document.ClientEmail, &document.ManagerName,
+		&document.ApartmentID, &document.ApartmentNumber, &document.ApartmentRooms,
+		&document.ApartmentFloor, &document.ApartmentArea, &document.ApartmentFinishing,
+		&document.ComplexName, &document.ComplexAddress,
+		&document.BuildingID, &document.BuildingAddress, &document.BuildingDistrict,
+		&document.ReadinessPercent, &document.PlannedDate, &document.ForecastDate,
+		&document.DeliveryShiftDays, &document.ParkingArea, &document.StorageArea,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrOfferNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return document, nil
 }
 
 func (r *offerRepository) GetByRequestID(ctx context.Context, requestID string) (*domain.Offer, error) {

@@ -1,14 +1,13 @@
 package handler
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"backend/internal/domain"
 	"backend/internal/repository"
@@ -17,16 +16,21 @@ import (
 )
 
 type OfferHandler struct {
-	offers   service.OfferService
-	delivery service.OfferDeliveryService
+	offers    service.OfferService
+	delivery  service.OfferDeliveryService
+	documents offerDocumentReader
 }
 
-func NewOfferHandler(offers service.OfferService, deliveries ...service.OfferDeliveryService) *OfferHandler {
+type offerDocumentReader interface {
+	GetDocument(ctx context.Context, id int) (*domain.OfferDocument, error)
+}
+
+func NewOfferHandler(offers service.OfferService, documents offerDocumentReader, deliveries ...service.OfferDeliveryService) *OfferHandler {
 	var delivery service.OfferDeliveryService
 	if len(deliveries) > 0 {
 		delivery = deliveries[0]
 	}
-	return &OfferHandler{offers: offers, delivery: delivery}
+	return &OfferHandler{offers: offers, delivery: delivery, documents: documents}
 }
 
 func (h *OfferHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +148,16 @@ func (h *OfferHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "PDF is available only for an approved offer", http.StatusConflict)
 		return
 	}
-	document := buildOfferPDF(offer)
+	documentData, err := h.documents.GetDocument(r.Context(), offer.ID)
+	if err != nil {
+		writeOfferError(w, err)
+		return
+	}
+	document, err := buildOfferPDF(documentData)
+	if err != nil {
+		http.Error(w, "failed to generate PDF", http.StatusInternalServerError)
+		return
+	}
 	if h.delivery != nil {
 		if err := h.delivery.Store(r.Context(), offer.ID, document); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -172,7 +185,17 @@ func (h *OfferHandler) Send(w http.ResponseWriter, r *http.Request) {
 		writeOfferError(w, err)
 		return
 	}
-	result, err := h.delivery.Send(r.Context(), offer, buildOfferPDF(offer))
+	documentData, err := h.documents.GetDocument(r.Context(), offer.ID)
+	if err != nil {
+		writeOfferError(w, err)
+		return
+	}
+	document, err := buildOfferPDF(documentData)
+	if err != nil {
+		http.Error(w, "failed to generate PDF", http.StatusInternalServerError)
+		return
+	}
+	result, err := h.delivery.Send(r.Context(), offer, document)
 	if err != nil {
 		if errors.Is(err, service.ErrOfferEmailNotConfigured) {
 			writeJSON(w, http.StatusServiceUnavailable, result)
@@ -210,67 +233,4 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
-}
-
-func buildOfferPDF(offer *domain.Offer) []byte {
-	apartmentPrice := offer.BasePrice - offer.ParkingPrice - offer.StoragePrice
-	lines := []string{
-		"DSK COMMERCIAL OFFER",
-		fmt.Sprintf("Offer: %d", offer.ID),
-		fmt.Sprintf("Deal: %d", offer.DealID),
-		fmt.Sprintf("Apartment: %d RUB", apartmentPrice),
-	}
-	if offer.ParkingUnitID != nil {
-		number := strconv.Itoa(*offer.ParkingUnitID)
-		if offer.ParkingNumber != nil {
-			number = *offer.ParkingNumber
-		}
-		lines = append(lines, fmt.Sprintf("Parking %s: %d RUB", number, offer.ParkingPrice))
-	}
-	if offer.StorageUnitID != nil {
-		number := strconv.Itoa(*offer.StorageUnitID)
-		if offer.StorageNumber != nil {
-			number = *offer.StorageNumber
-		}
-		lines = append(lines, fmt.Sprintf("Storage %s: %d RUB", number, offer.StoragePrice))
-	}
-	lines = append(lines,
-		fmt.Sprintf("Base total: %d RUB", offer.BasePrice),
-		fmt.Sprintf("Discount: %s%%", offer.DiscountPercent),
-		fmt.Sprintf("Final price: %d RUB", offer.FinalPrice),
-		fmt.Sprintf("Generated: %s", time.Now().UTC().Format(time.RFC3339)),
-	)
-	var content strings.Builder
-	content.WriteString("BT /F1 18 Tf 56 780 Td ")
-	for index, line := range lines {
-		if index > 0 {
-			content.WriteString("0 -30 Td ")
-		}
-		content.WriteString("(")
-		content.WriteString(strings.NewReplacer("\\", "\\\\", "(", "\\(", ")", "\\)").Replace(line))
-		content.WriteString(") Tj ")
-	}
-	content.WriteString("ET")
-	stream := content.String()
-	objects := []string{
-		"<< /Type /Catalog /Pages 2 0 R >>",
-		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-		fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(stream), stream),
-		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-	}
-	var out bytes.Buffer
-	out.WriteString("%PDF-1.4\n")
-	offsets := make([]int, len(objects)+1)
-	for index, object := range objects {
-		offsets[index+1] = out.Len()
-		fmt.Fprintf(&out, "%d 0 obj\n%s\nendobj\n", index+1, object)
-	}
-	xref := out.Len()
-	fmt.Fprintf(&out, "xref\n0 %d\n0000000000 65535 f \n", len(objects)+1)
-	for index := 1; index <= len(objects); index++ {
-		fmt.Fprintf(&out, "%010d 00000 n \n", offsets[index])
-	}
-	fmt.Fprintf(&out, "trailer << /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(objects)+1, xref)
-	return out.Bytes()
 }
