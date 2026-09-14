@@ -1,11 +1,7 @@
--- Чистая база данных: 3 ЖК, по 3 дома в каждом (д. 126/1, 126/2 и т.д.), 30 квартир суммарно.
--- Только сотрудники (manager, supervisor) без демонстрационных чатов и сделок.
+-- Локальные demo-данные: каталог объектов и одна полностью связанная AI/E2E-сделка.
 -- Пароль для сотрудников: Demo123!
 
 BEGIN;
-
--- Очистка чатов, сообщений, сделок, КП, если они существовали
-TRUNCATE TABLE messages, chat_session_rejections, chat_sessions, offers, offer_documents, offer_deliveries, deals, notifications, ai_audit_log, discount_policies CASCADE;
 
 -- Сотрудники
 INSERT INTO users (id, name, email, password_hash, role, budget_max, preferences) VALUES
@@ -15,8 +11,12 @@ ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name, email = EXCLUDED.email, password_hash = EXCLUDED.password_hash,
     role = EXCLUDED.role, budget_max = EXCLUDED.budget_max, preferences = EXCLUDED.preferences;
 
--- Удаляем других демо-пользователей если были
-DELETE FROM users WHERE role NOT IN ('manager', 'supervisor');
+-- Клиент для связанного AI/E2E-сценария
+INSERT INTO users (id, name, email, password_hash, role, budget_max, preferences) VALUES
+    (1101, 'Анна Смирнова', 'anna.smirnova@example.demo', '$2a$10$yvWiRVYYE6BbkVZmz3EFM.7g.90jRc6c9TWMP5pnRUVGuQNo42fNe', 'user', NULL, '{}'::jsonb)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name, email = EXCLUDED.email, password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role, budget_max = EXCLUDED.budget_max, preferences = EXCLUDED.preferences;
 
 -- 3 Жилых комплекса
 INSERT INTO residential_complexes (id, name, address, description) VALUES
@@ -32,7 +32,7 @@ INSERT INTO buildings (
     readiness_percent, forecast_date, delivery_shift_days
 ) VALUES
     -- ЖК Северный (3 дома)
-    (2101, 2001, 'д. 126/1', 'Коминтерновский', 51.70510000, 39.16820000, 17, CURRENT_DATE + 210, NULL, 'construction', 'panel', 68, CURRENT_DATE + 219, 0),
+    (2101, 2001, 'д. 126/1', 'Коминтерновский', 51.70510000, 39.16820000, 17, CURRENT_DATE + 210, NULL, 'construction', 'panel', 68, CURRENT_DATE + 219, 9),
     (2102, 2001, 'д. 126/2', 'Коминтерновский', 51.70600000, 39.16910000, 20, CURRENT_DATE + 420, NULL, 'construction', 'monolith', 34, CURRENT_DATE + 420, 0),
     (2103, 2001, 'д. 126/3', 'Коминтерновский', 51.70700000, 39.17000000, 19, CURRENT_DATE + 550, NULL, 'construction', 'panel', 20, CURRENT_DATE + 550, 0),
 
@@ -116,7 +116,7 @@ INSERT INTO construction_progress (
     (4001, 2101, 'excavation', CURRENT_DATE - 420, CURRENT_DATE - 420, CURRENT_DATE - 380, CURRENT_DATE - 378, 'completed', 100, NULL, 'low', 0),
     (4002, 2101, 'foundation', CURRENT_DATE - 378, CURRENT_DATE - 376, CURRENT_DATE - 300, CURRENT_DATE - 294, 'completed', 100, NULL, 'low', 0),
     (4003, 2101, 'frame', CURRENT_DATE - 292, CURRENT_DATE - 292, CURRENT_DATE - 80, CURRENT_DATE - 72, 'completed', 100, NULL, 'low', 0),
-    (4004, 2101, 'roofing', CURRENT_DATE - 70, CURRENT_DATE - 68, CURRENT_DATE + 15, NULL, 'in_progress', 74, NULL, 'low', 0),
+    (4004, 2101, 'roofing', CURRENT_DATE - 70, CURRENT_DATE - 68, CURRENT_DATE + 15, NULL, 'delayed', 74, 'Задержка поставки дверных блоков', 'high', 9),
     (4005, 2101, 'finishing', CURRENT_DATE + 5, NULL, CURRENT_DATE + 170, NULL, 'not_started', 0, NULL, 'low', 0),
     (4011, 2102, 'excavation', CURRENT_DATE - 160, CURRENT_DATE - 160, CURRENT_DATE - 110, CURRENT_DATE - 108, 'completed', 100, NULL, 'low', 0),
     (4012, 2102, 'foundation', CURRENT_DATE - 108, CURRENT_DATE - 106, CURRENT_DATE - 30, NULL, 'in_progress', 82, NULL, 'low', 0),
@@ -129,6 +129,59 @@ ON CONFLICT (id) DO UPDATE SET
     planned_end_date = EXCLUDED.planned_end_date, actual_end_date = EXCLUDED.actual_end_date,
     status = EXCLUDED.status, completion_percentage = EXCLUDED.completion_percentage,
     delay_reason = EXCLUDED.delay_reason, risk_level = EXCLUDED.risk_level, delay_days = EXCLUDED.delay_days;
+
+-- Диалог, назначенный demo-менеджеру, и сообщения для Dialog Analyze / Reply Assist
+INSERT INTO chat_sessions (
+    id, id_user, id_employee, id_apartment, guest_name, guest_email, guest_phone,
+    status, deleted_by_user, created_at, updated_at
+) VALUES
+    (5001, 1101, 1002, 3001, NULL, NULL, NULL, 'in_progress', FALSE,
+     CURRENT_TIMESTAMP - INTERVAL '3 days', CURRENT_TIMESTAMP - INTERVAL '10 minutes')
+ON CONFLICT (id) DO UPDATE SET
+    id_user = EXCLUDED.id_user, id_employee = EXCLUDED.id_employee,
+    id_apartment = EXCLUDED.id_apartment, guest_name = EXCLUDED.guest_name,
+    guest_email = EXCLUDED.guest_email, guest_phone = EXCLUDED.guest_phone,
+    status = EXCLUDED.status, deleted_by_user = EXCLUDED.deleted_by_user,
+    created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at;
+
+INSERT INTO messages (id, id_chat_session, id_user, sender_type, content, is_read, sended_at) VALUES
+    (5101, 5001, 1101, 'client', 'Ищу двухкомнатную квартиру до 15 млн рублей, не ниже 7 этажа. Парковка обязательна.', TRUE, CURRENT_TIMESTAMP - INTERVAL '2 days'),
+    (5102, 5001, 1002, 'manager', 'Подобрал подходящую квартиру и проверяю условия сделки.', TRUE, CURRENT_TIMESTAMP - INTERVAL '1 day'),
+    (5103, 5001, 1101, 'client', 'У конкурента похожая квартира дешевле, я не уверен, что стоит переплачивать.', FALSE, CURRENT_TIMESTAMP - INTERVAL '10 minutes')
+ON CONFLICT (id) DO UPDATE SET
+    id_chat_session = EXCLUDED.id_chat_session, id_user = EXCLUDED.id_user,
+    sender_type = EXCLUDED.sender_type, content = EXCLUDED.content,
+    is_read = EXCLUDED.is_read, sended_at = EXCLUDED.sended_at;
+
+-- Сделка связывает тот же диалог, клиента, менеджера и квартиру
+INSERT INTO deals (
+    id, id_user, id_employee, id_apartment, id_chat_session,
+    base_price, percent_discount, total_price, status, created_at, updated_at
+) VALUES
+    (6001, 1101, 1002, 3001, 5001, 8950000, 0.00, 8950000, 'pending',
+     CURRENT_TIMESTAMP - INTERVAL '2 days', CURRENT_TIMESTAMP - INTERVAL '10 minutes')
+ON CONFLICT (id) DO UPDATE SET
+    id_user = EXCLUDED.id_user, id_employee = EXCLUDED.id_employee,
+    id_apartment = EXCLUDED.id_apartment, id_chat_session = EXCLUDED.id_chat_session,
+    base_price = EXCLUDED.base_price, percent_discount = EXCLUDED.percent_discount,
+    total_price = EXCLUDED.total_price, status = EXCLUDED.status,
+    created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at;
+
+-- Фактическое сравнение для Negotiation Agent
+INSERT INTO competitors (
+    id, project_name, district, price_per_sqm, advantages, disadvantages,
+    source_url, observed_at, updated_at, rooms, area
+) VALUES
+    (9001, 'ЖК «Конкурент»', 'Коминтерновский', 140000, 'Более низкая цена',
+     'Более поздний срок сдачи и отсутствие собственной парковки',
+     'https://example.demo/competitor', CURRENT_TIMESTAMP - INTERVAL '1 day',
+     CURRENT_TIMESTAMP - INTERVAL '1 day', 2, 62.00)
+ON CONFLICT (id) DO UPDATE SET
+    project_name = EXCLUDED.project_name, district = EXCLUDED.district,
+    price_per_sqm = EXCLUDED.price_per_sqm, advantages = EXCLUDED.advantages,
+    disadvantages = EXCLUDED.disadvantages, source_url = EXCLUDED.source_url,
+    observed_at = EXCLUDED.observed_at, updated_at = EXCLUDED.updated_at,
+    rooms = EXCLUDED.rooms, area = EXCLUDED.area;
 
 -- Паркинг и кладовые
 INSERT INTO ancillary_units (id, building_id, kind, number, area, price, status) VALUES
@@ -166,7 +219,11 @@ SELECT setval(pg_get_serial_sequence('residential_complexes', 'id'), COALESCE((S
 SELECT setval(pg_get_serial_sequence('buildings', 'id'), COALESCE((SELECT MAX(id) FROM buildings), 1));
 SELECT setval(pg_get_serial_sequence('apartments', 'id'), COALESCE((SELECT MAX(id) FROM apartments), 1));
 SELECT setval(pg_get_serial_sequence('construction_progress', 'id'), COALESCE((SELECT MAX(id) FROM construction_progress), 1));
+SELECT setval(pg_get_serial_sequence('chat_sessions', 'id'), COALESCE((SELECT MAX(id) FROM chat_sessions), 1));
+SELECT setval(pg_get_serial_sequence('messages', 'id'), COALESCE((SELECT MAX(id) FROM messages), 1));
+SELECT setval(pg_get_serial_sequence('deals', 'id'), COALESCE((SELECT MAX(id) FROM deals), 1));
 SELECT setval(pg_get_serial_sequence('ancillary_units', 'id'), COALESCE((SELECT MAX(id) FROM ancillary_units), 1));
 SELECT setval(pg_get_serial_sequence('discount_policies', 'id'), COALESCE((SELECT MAX(id) FROM discount_policies), 1));
+SELECT setval(pg_get_serial_sequence('competitors', 'id'), COALESCE((SELECT MAX(id) FROM competitors), 1));
 
 COMMIT;

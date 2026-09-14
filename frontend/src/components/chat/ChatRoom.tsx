@@ -5,8 +5,8 @@ import { chatsApi } from '../../api/chats';
 import { apartmentsApi } from '../../api/apartments';
 import { dealsApi } from '../../api/deals';
 import { useAuth } from '../../context/AuthContext';
+import { useAssistant } from '../../context/AssistantContext';
 import { formatDateTime, formatPrice, getRoomsLabel, getChatSessionStatusBadge } from '../../lib/utils';
-import { ManagerAIPanel } from './ManagerAIPanel';
 import { ApartmentModal } from '../apartments/ApartmentModal';
 
 interface ChatRoomProps {
@@ -17,6 +17,7 @@ interface ChatRoomProps {
 
 export const ChatRoom: React.FC<ChatRoomProps> = ({ sessionId, onSessionUpdated, onSessionTaken }) => {
   const { user } = useAuth();
+  const { registerActiveChat, clearActiveChat } = useAssistant();
   const isStaff = user?.role === 'manager' || user?.role === 'supervisor';
 
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -96,6 +97,30 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ sessionId, onSessionUpdated,
     const interval = setInterval(loadMessages, 4000);
     return () => clearInterval(interval);
   }, [sessionId, isStaff]);
+
+  useEffect(() => {
+    if (!isStaff || !session) return;
+    registerActiveChat(
+      {
+        sessionId,
+        dealId: relatedDeal?.id,
+        clientName: session.user_name || session.guest_name,
+        apartmentNumber: apartment?.number,
+        basePrice: apartment?.price,
+      },
+      (replyText) => setInputText(replyText),
+    );
+    return () => clearActiveChat(sessionId);
+  }, [
+    apartment?.number,
+    apartment?.price,
+    clearActiveChat,
+    isStaff,
+    registerActiveChat,
+    relatedDeal?.id,
+    session,
+    sessionId,
+  ]);
 
   // Only scroll down on initial session load or when new message count increases
   useEffect(() => {
@@ -245,17 +270,6 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ sessionId, onSessionUpdated,
           </div>
         )}
       </div>
-
-      {/* Staff AI Assistant Bar (available on all staff sessions) */}
-      {isStaff && (
-        <div className="p-3 border-b-2 border-zinc-900 bg-[#FAF8F2]">
-          <ManagerAIPanel
-            sessionId={sessionId}
-            dealId={relatedDeal?.id}
-            onApplyReplyText={(replyText) => setInputText(replyText)}
-          />
-        </div>
-      )}
 
       {/* Message History Area */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#FAF8F2]/30">

@@ -178,14 +178,14 @@ export const LoginPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => handleDemoLogin('ivan.manager@dsk.ru', true)}
+                onClick={() => handleDemoLogin('manager@dsk.demo', true)}
                 className="p-2.5 bg-[#FAF8F2] border-2 border-zinc-300 hover:border-zinc-900 text-xs font-bold text-zinc-800 rounded-xl transition-all text-center"
               >
                 Менеджер
               </button>
               <button
                 type="button"
-                onClick={() => handleDemoLogin('elena.boss@dsk.ru', true)}
+                onClick={() => handleDemoLogin('supervisor@dsk.demo', true)}
                 className="p-2.5 bg-[#FAF8F2] border-2 border-zinc-300 hover:border-zinc-900 text-xs font-bold text-zinc-800 rounded-xl transition-all text-center"
               >
                 Руководитель

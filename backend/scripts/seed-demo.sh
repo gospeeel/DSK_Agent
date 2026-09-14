@@ -13,6 +13,7 @@ apply_sql() {
 apply_sql "$PROJECT_DIR/backend/migrations/000007_reconcile_schema_and_notification_state.sql"
 apply_sql "$PROJECT_DIR/backend/migrations/000008_sales_workflow.sql"
 apply_sql "$PROJECT_DIR/backend/migrations/000009_offer_ancillary_price_snapshot.sql"
+apply_sql "$PROJECT_DIR/backend/migrations/000010_chat_delete_and_lifecycle_updates.sql"
 apply_sql "$PROJECT_DIR/backend/seeds/demo.sql"
 
 echo "Demo seed applied. Staff accounts: manager@dsk.demo, supervisor@dsk.demo"

@@ -249,11 +249,11 @@ func (r *offerRepository) Decide(ctx context.Context, id, supervisorID int, appr
 	err := r.db.QueryRow(ctx, `
 		UPDATE offers SET
 			status = $1,
-			approved_by = CASE WHEN $2 THEN $3 ELSE NULL END,
-			approved_at = CASE WHEN $2 THEN CURRENT_TIMESTAMP ELSE NULL END,
-			rejected_by = CASE WHEN $2 THEN NULL ELSE $3 END,
-			rejected_at = CASE WHEN $2 THEN NULL ELSE CURRENT_TIMESTAMP END,
-			rejection_reason = CASE WHEN $2 THEN NULL ELSE NULLIF(TRIM($4), '') END,
+			approved_by = CASE WHEN $2::boolean THEN $3::int ELSE NULL::int END,
+			approved_at = CASE WHEN $2::boolean THEN CURRENT_TIMESTAMP ELSE NULL::timestamp END,
+			rejected_by = CASE WHEN $2::boolean THEN NULL::int ELSE $3::int END,
+			rejected_at = CASE WHEN $2::boolean THEN NULL::timestamp ELSE CURRENT_TIMESTAMP END,
+			rejection_reason = CASE WHEN $2::boolean THEN NULL::varchar ELSE NULLIF(TRIM($4::text), '') END,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = $5 AND status = $6 AND approval_required = TRUE
 		RETURNING id

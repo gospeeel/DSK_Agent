@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AssistantProvider } from './context/AssistantContext';
 import { Navbar } from './components/layout/Navbar';
 import { FloatingAIAssistantWidget } from './components/chat/FloatingAIAssistantWidget';
 import { ApartmentsPage } from './pages/ApartmentsPage';
@@ -41,8 +42,9 @@ const ProtectedSupervisorRoute: React.FC<{ children: React.ReactNode }> = ({ chi
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900">
+      <AssistantProvider>
+        <BrowserRouter>
+          <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900">
           <Navbar />
           <main className="flex-1">
             <Routes>
@@ -108,8 +110,9 @@ export const App: React.FC = () => {
             </Routes>
           </main>
           <FloatingAIAssistantWidget />
-        </div>
-      </BrowserRouter>
+          </div>
+        </BrowserRouter>
+      </AssistantProvider>
     </AuthProvider>
   );
 };
